@@ -1,4 +1,4 @@
-generator client {
+enum AppointmentStatus { CONFIRMADO PENDENTE CANCELADO NO_SHOW }\n\nenum PaymentStatus { PENDENTE PAGO CANCELADO }\n\ngenerator client {
   provider = "prisma-client-js"
 }
 
@@ -204,7 +204,7 @@ model ServiceOrder {
   mechanic         Mechanic?          @relation(fields: [mechanicId], references: [id])
   bay              String?
   valueTotal       Decimal            @default(0) @db.Decimal(10,2)
-  approvedAt       DateTime?
+  approvedAt       DateTime?\n  version          Int                @default(1)
   deliveredAt      DateTime?
   notes            String?            @db.Text
   createdAt        DateTime           @default(now())
@@ -259,7 +259,7 @@ model Appointment {
   bay           String?
   mechanicId    String?
   mechanic      Mechanic?     @relation(fields: [mechanicId], references: [id])
-  status        String        @default("confirmado")
+  status        AppointmentStatus @default(CONFIRMADO)
   notes         String?       @db.Text
   createdAt     DateTime      @default(now())
   updatedAt     DateTime      @updatedAt
@@ -274,7 +274,7 @@ model Commission {
   serviceOrderItemId String?
   serviceOrderItem   ServiceOrderItem? @relation(fields: [serviceOrderItemId], references: [id])
   amount             Decimal          @db.Decimal(10,2)
-  paidAt             DateTime?
+  paidAt             DateTime?\n  commissionPaidAt   DateTime?\n  commissionAmount   Decimal?           @db.Decimal(10,2)
   createdAt          DateTime         @default(now())
   updatedAt          DateTime         @updatedAt
 }
@@ -371,3 +371,13 @@ model AuditLog {
   metadata   Json?
   createdAt  DateTime @default(now())
 }
+
+
+
+
+
+
+
+
+
+
