@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>SGOM — Protótipos de interface (3 propostas)</title>
+  <meta name="description" content="Três propostas de interface para o SGOM, Sistema de Gerenciamento de Oficina de Motocicletas.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Manrope:wght@600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+  <style>
+    :root{
+      --bg:#f5f6f7; --surface:#fff; --text:#14171a; --muted:#5b6470; --border:#e3e6ea;
+      --accent:#f97316; --accent-strong:#c2410c; --accent-tint:#fff1e6;
+      --font-ui:"Inter",system-ui,sans-serif; --font-display:"Manrope",system-ui,sans-serif; --font-mono:"JetBrains Mono",monospace;
+    }
+    *{box-sizing:border-box;}
+    body{margin:0;font-family:var(--font-ui);color:var(--text);line-height:1.55;
+      background:radial-gradient(900px 420px at 100% -10%,#fff2e6,transparent 60%),var(--bg);}
+    .wrap{max-width:1080px;margin:0 auto;padding:40px 22px 64px;}
+    a{color:var(--accent-strong);}
+    :focus-visible{outline:2px solid var(--accent-strong);outline-offset:2px;border-radius:4px;}
+    .hero{display:flex;gap:16px;align-items:center;margin-bottom:8px;}
+    .logo{width:52px;height:52px;border-radius:14px;background:var(--accent);color:#fff;display:grid;place-items:center;flex:0 0 auto;}
+    h1{font-family:var(--font-display);font-size:30px;margin:0;letter-spacing:-.02em;}
+    .subtitle{color:var(--muted);margin:2px 0 0;font-size:15px;}
+    h2{font-family:var(--font-display);font-size:20px;margin:40px 0 14px;}
+    h3{font-family:var(--font-display);font-size:16px;margin:0 0 6px;}
+    .panel{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-top:14px;}
+    .p-card{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:18px;box-shadow:0 4px 16px rgba(16,20,26,.06);}
+    .p-card .tag{font-size:11px;text-transform:uppercase;letter-spacing:.07em;font-weight:700;color:var(--accent-strong);background:var(--accent-tint);padding:3px 9px;border-radius:999px;display:inline-block;margin-bottom:10px;}
+    .p-card p{margin:.4em 0;font-size:14px;color:var(--muted);}
+    .p-card ul{margin:.4em 0 0;padding-left:18px;font-size:13.5px;color:var(--muted);}
+    .proposals{display:grid;grid-template-columns:repeat(3,1fr);gap:18px;margin-top:14px;}
+    .prop{background:var(--surface);border:1px solid var(--border);border-radius:16px;overflow:hidden;box-shadow:0 4px 16px rgba(16,20,26,.06);display:flex;flex-direction:column;}
+    .thumb{height:150px;position:relative;display:grid;grid-template-columns:64px 1fr;}
+    .thumb .sbar{background:#14171a;}
+    .thumb .body{padding:12px;display:flex;flex-direction:column;gap:7px;}
+    .sk{height:9px;border-radius:4px;background:#e3e6ea;}
+    .sk.w60{width:60%;}.sk.w40{width:40%;}.sk.w80{width:80%;}
+    .t1{background:#f5f6f7;}
+    .t2{background:#0e1114;}.t2 .sbar{background:#12151a;border-right:1px solid #262b32;}.t2 .sk{background:#262b32;}
+    .t3{background:#fafafb;display:flex;flex-direction:column;padding:0;}
+    .t3 .navh{height:40px;border-bottom:1px solid #ecedef;background:#fff;display:flex;align-items:center;gap:6px;padding:0 12px;}
+    .t3 .pill{height:16px;width:56px;border-radius:999px;background:#fff1e6;}
+    .t3 .pill.g{background:#ecedef;}
+    .t3 .grid3{flex:1;display:grid;grid-template-columns:repeat(3,1fr);gap:7px;padding:12px;}
+    .t3 .col{background:#fff;border:1px dashed #ecedef;border-radius:10px;padding:7px;display:flex;flex-direction:column;gap:6px;}
+    .t3 .kcard{background:#fff;border:1px solid #ecedef;border-radius:8px;height:34px;box-shadow:0 2px 6px rgba(16,20,26,.05);}
+    .prop .info{padding:16px;flex:1;display:flex;flex-direction:column;}
+    .prop .info p{color:var(--muted);font-size:13.5px;margin:.3em 0 .8em;flex:1;}
+    .btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:42px;padding:10px 16px;border-radius:10px;border:1px solid var(--border);background:var(--surface);color:var(--text);font-weight:600;text-decoration:none;cursor:pointer;}
+    .btn:hover{background:#f7f7f8;}
+    .btn--primary{background:var(--accent-strong);border-color:var(--accent-strong);color:#fff;}
+    .btn--primary:hover{filter:brightness(.94);}
+    table{width:100%;border-collapse:collapse;background:var(--surface);border:1px solid var(--border);border-radius:14px;overflow:hidden;margin-top:14px;font-size:14px;}
+    caption{text-align:left;color:var(--muted);padding:0 0 8px;font-size:13.5px;}
+    th,td{padding:12px 14px;border-bottom:1px solid var(--border);text-align:left;vertical-align:top;}
+    thead th{background:#fafbfc;font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);}
+    tbody tr:last-child td{border-bottom:0;}
+    .check{color:#16a34a;font-weight:700;}
+    .warn{color:#b45309;font-weight:700;}
+    .note{background:var(--accent-tint);border:1px solid #ffd9b8;border-radius:12px;padding:14px 16px;font-size:13.5px;color:#7a3a06;}
+    .mono{font-family:var(--font-mono);}
+    footer{color:var(--muted);font-size:13px;margin-top:40px;border-top:1px solid var(--border);padding-top:16px;}
+    @media(max-width:900px){.panel,.proposals{grid-template-columns:1fr;}}
+    @media(prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important;}}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="hero">
+      <span class="logo" aria-hidden="true">
+        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><circle cx="18.5" cy="17.5" r="3.5"/><circle cx="5.5" cy="17.5" r="3.5"/><circle cx="15" cy="5" r="1"/><path d="M12 17.5V14l-3-3 4-3 2 3h2"/></svg>
+      </span>
+      <div>
+        <h1>SGOM — Protótipos de Interface</h1>
+        <p class="subtitle">Sistema de Gerenciamento para Oficina de Motocicletas · Rota 45 Motos · 3 propostas navegáveis</p>
+      </div>
+    </div>
+
+    <p class="note">
+      <strong>Como comparar:</strong> abra cada proposta, troque de tela pela navegação lateral/superior e alterne entre as propostas pela barra no rodapé.
+      Todos os dados são fictícios. Campos, tabelas e botões funcionam em modo demonstração (sem persistência).
+    </p>
+
+    <h2>Três propostas para o mesmo sistema</h2>
+    <p class="subtitle">Mesmo escopo, mesmas telas e mesma identidade (preto + laranja); muda a organização e o estilo visual.</p>
+    <div class="proposals">
+      <article class="prop">
+        <div class="thumb t1" aria-hidden="true">
+          <div class="sbar"></div>
+          <div class="body"><div class="sk w60"></div><div class="sk w80"></div><div class="sk w40"></div><div class="sk w80"></div><div class="sk w60"></div></div>
+        </div>
+        <div class="info">
+          <span class="tag" style="align-self:flex-start">Proposta 1</span>
+          <h3>Oficina Pro</h3>
+          <p>Corporativo clássico. Sidebar escura fixa, tabelas densas e hierarquia tipográfica sóbria. Próxima de um ERP de mercado.</p>
+          <a class="btn btn--primary" href="proposta-1.html">Abrir Proposta 1 →</a>
+        </div>
+      </article>
+
+      <article class="prop">
+        <div class="thumb t2" aria-hidden="true">
+          <div class="sbar"></div>
+          <div class="body"><div class="sk w60"></div><div class="sk w40"></div><div class="sk w80"></div><div class="sk w60"></div><div class="sk w80"></div></div>
+        </div>
+        <div class="info">
+          <span class="tag" style="align-self:flex-start">Proposta 2</span>
+          <h3>Pitlane</h3>
+          <p>Industrial escuro. Rail de ícones, dados densos e alto contraste, pensado para leitura rápida no pátio e na bancada.</p>
+          <a class="btn btn--primary" href="proposta-2.html">Abrir Proposta 2 →</a>
+        </div>
+      </article>
+
+      <article class="prop">
+        <div class="thumb t3" aria-hidden="true">
+          <div class="navh"><span class="pill"></span><span class="pill g"></span><span class="pill g"></span></div>
+          <div class="grid3"><div class="col"><div class="kcard"></div><div class="kcard"></div></div><div class="col"><div class="kcard"></div></div><div class="col"><div class="kcard"></div><div class="kcard"></div></div></div>
+        </div>
+        <div class="info">
+          <span class="tag" style="align-self:flex-start">Proposta 3</span>
+          <h3>Garage Flow</h3>
+          <p>Moderno SaaS. Navegação horizontal, cartões arredondados e kanban como tela principal. Leve e contemporâneo.</p>
+          <a class="btn btn--primary" href="proposta-3.html">Abrir Proposta 3 →</a>
+        </div>
+      </article>
+    </div>
+
+    <h2>Painel de especialistas</h2>
+    <div class="panel">
+      <div class="p-card">
+        <span class="tag">UX Design</span>
+        <p>Definiu a arquitetura de informação, a navegação por perfil (admin, recepção, mecânico) e os fluxos principais.</p>
+        <ul>
+          <li>Agrupamento em Operação, Oficina, Cadastros e Sistema.</li>
+          <li>Fluxos: ciclo da OS, aprovação de orçamento, estoque baixo e lembrete por km.</li>
+          <li>Cada proposta muda o padrão de navegação (sidebar, rail, topo) mantendo o conteúdo.</li>
+        </ul>
+      </div>
+      <div class="p-card">
+        <span class="tag">Acessibilidade</span>
+        <p>Aplicou WCAG 2.1 AA: contraste, foco, teclado, semântica e mensagens acessíveis.</p>
+        <ul>
+          <li>Laranja de ação com tons que passam AA (texto escuro sobre laranja, ou laranja escuro sobre claro).</li>
+          <li>Skip link, landmarks, um <span class="mono">h1</span> por tela, foco visível.</li>
+          <li>Status nunca depende só de cor (ponto + rótulo), tabelas com <span class="mono">caption</span> e <span class="mono">scope</span>.</li>
+          <li>Modais com <span class="mono">role="dialog"</span>, Esc e foco gerenciado; avisos em <span class="mono">aria-live</span>.</li>
+        </ul>
+      </div>
+      <div class="p-card">
+        <span class="tag">Design Visual</span>
+        <p>Criou a identidade preto + laranja e três direções distintas sobre ela.</p>
+        <ul>
+          <li>Tipografia: Manrope (títulos), Inter (corpo), JetBrains Mono (números/placas).</li>
+          <li>Componentes reutilizáveis: cards, tabelas, badges, kanban, chips.</li>
+          <li>Detalhes de domínio: placa em mono, km, baia, preventiva por km, estoque mínimo.</li>
+        </ul>
+      </div>
+    </div>
+
+    <h2>Comparação</h2>
+    <div class="table-scroll">
+    <table>
+      <caption>Pontos fortes por critério (avaliação da equipe de especialistas).</caption>
+      <thead>
+        <tr><th scope="col">Critério</th><th scope="col">1 · Oficina Pro</th><th scope="col">2 · Pitlane</th><th scope="col">3 · Garage Flow</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <th scope="row">Usabilidade</th>
+          <td><span class="check">Alta</span> — padrão familiar de ERP; separação clara por menu lateral.</td>
+          <td><span class="check">Alta</span> — ação rápida; ideal para uso intenso com poucos cliques.</td>
+          <td><span class="check">Alta</span> — kanban torna o andamento da oficina imediatamente visível.</td>
+        </tr>
+        <tr>
+          <th scope="row">Acessibilidade</th>
+          <td><span class="check">Muito boa</span> — contraste forte entre sidebar escura e conteúdo claro.</td>
+          <td><span class="warn">Boa, com atenção</span> — tema escuro exige cuidado extra de contraste; validado com tokens AA.</td>
+          <td><span class="check">Muito boa</span> — fundo claro, alvos grandes e boa legibilidade.</td>
+        </tr>
+        <tr>
+          <th scope="row">Design visual</th>
+          <td>Sóbrio e corporativo; transmite confiança e seriedade.</td>
+          <td>Marcante e técnico; “cara de oficina high-tech”.</td>
+          <td>Moderno e leve; próximo de produtos SaaS atuais.</td>
+        </tr>
+        <tr>
+          <th scope="row">Uso em computador</th>
+          <td>Excelente — muita informação por tela em tabelas.</td>
+          <td>Excelente — densidade máxima para telas grandes.</td>
+          <td>Ótimo — bom equilíbrio, com mais respiro.</td>
+        </tr>
+        <tr>
+          <th scope="row">Uso em telas menores</th>
+          <td>Boa — sidebar recolhe para ícones.</td>
+          <td>Boa — rail já é compacto.</td>
+          <td>Muito boa — navegação horizontal e kanban rolável.</td>
+        </tr>
+        <tr>
+          <th scope="row">Quando escolher</th>
+          <td>Para um público conservador e adoção rápida da equipe.</td>
+          <td>Para oficinas grandes, alto volume e uso em ambiente “sujo”.</td>
+          <td>Para um posicionamento moderno e foco no fluxo das OS.</td>
+        </tr>
+      </tbody>
+    </table>
+    </div>
+
+    <h2>Telas incluídas em cada proposta</h2>
+    <p class="subtitle">Dashboard, Atendimentos (OS), Orçamentos, Agendamento, Estoque, Preventiva por km, Garantia, Clientes, Serviços e Perfil/Configurações.</p>
+
+    <footer>
+      Protótipo de interface — SGOM · dados fictícios (oficina “Rota 45 Motos”) · nenhuma informação pessoal real.
+      Documento de referência: <span class="mono">PRD.md</span>.
+    </footer>
+  </div>
+</body>
+</html>

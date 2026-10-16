@@ -1,0 +1,53 @@
+/* =====================================================================
+   PROPOSTA 1 — "Oficina Pro" (Corporativo Clássico)
+   Fundo claro, sidebar escura fixa, accent laranja. Mood de ERP.
+   ===================================================================== */
+:root {
+  --bg: #f5f6f7;
+  --surface: #ffffff;
+  --surface-2: #f7f7f8;
+  --text: #14171a;
+  --muted: #5b6470;
+  --border: #e3e6ea;
+  --accent: #f97316;
+  --accent-strong: #c2410c;
+  --accent-contrast: #ffffff;
+  --accent-tint: #fff1e6;
+  --focus: #c2410c;
+  --radius: 8px;
+  --radius-sm: 6px;
+  --radius-lg: 12px;
+  --shadow: 0 1px 3px rgba(16, 20, 26, .08);
+  --sidebar-bg: #14171a;
+}
+
+/* Sidebar escura */
+.sidebar .brand-text strong { color: #ffffff; }
+.sidebar .brand-text span { color: #9aa4b0; }
+.sidebar .brand-mark { background: var(--accent); color: #14171a; }
+.sidebar .nav-group-label { color: #7b8592; }
+.sidebar .nav-item { color: #cbd3dc; }
+.sidebar .nav-item:hover { background: #1f242b; }
+.sidebar .nav-item.is-active {
+  background: rgba(249, 115, 22, .14);
+  color: #ffb27a;
+  box-shadow: inset 3px 0 0 var(--accent);
+}
+.sidebar .sidebar-foot { border-top-color: #242a31; }
+.sidebar .user-meta strong { color: #ffffff; }
+.sidebar .user-meta span { color: #8b949e; }
+.sidebar .avatar { background: #252b33; color: #ffb27a; }
+
+/* Rail (quando aplicável): mantém legibilidade no escuro */
+body[data-layout="rail"] .sidebar .nav-item.is-active { box-shadow: inset 3px 0 0 var(--accent); }
+
+/* Cabeçalhos de seção e microdetalhes corporativos */
+.card-head { background: linear-gradient(0deg, #fafbfc, #ffffff); }
+.view-title { letter-spacing: -.01em; }
+.kpi-value { color: #14171a; }
+
+/* Tabela com cabeçalho discretamente sombreado */
+table.table thead th { background: #fafbfc; }
+
+/* Badge com aparência sólida-suave */
+.badge { background: #f7f7f8; }

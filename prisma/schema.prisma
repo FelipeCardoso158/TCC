@@ -1,0 +1,373 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  ADMIN
+  RECEPCAO
+  MECANICO
+  CLIENTE
+}
+
+enum OrderStatus {
+  RASCUNHO
+  ORCAMENTO
+  AGUARDANDO_APROVACAO
+  APROVADO
+  EM_EXECUCAO
+  AGUARDANDO_PECA
+  PRONTO
+  ENTREGUE
+  CANCELADO
+  REPROVADO
+}
+
+enum ItemType {
+  LABOR
+  PART
+}
+
+enum PaymentMethod {
+  DINHEIRO
+  PIX
+  CARTAO
+}
+
+enum WarrantyType {
+  PART
+  SERVICE
+}
+
+enum ReminderStatus {
+  OK
+  PROXIMO
+  VENCIDO
+}
+
+enum AttachmentType {
+  PHOTO
+  DIAGNOSIS
+  LAUDO
+}
+
+enum NotificationChannel {
+  EMAIL
+  WHATSAPP
+}
+
+enum NotificationStatus {
+  PENDING
+  SENT
+  FAILED
+}
+
+model Role {
+  id         String   @id @default(uuid())
+  name       UserRole @unique
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  users      User[]
+}
+
+model User {
+  id            String    @id @default(uuid())
+  name          String
+  email         String    @unique
+  passwordHash  String
+  active        Boolean   @default(true)
+  lastLoginAt   DateTime?
+  roleId        String
+  role          Role      @relation(fields: [roleId], references: [id])
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  auditLogs     AuditLog[]
+  mechanic      Mechanic?
+}
+
+model Customer {
+  id              String        @id @default(uuid())
+  name            String
+  cpfCnpj         String?       @unique
+  phone           String?
+  email           String?
+  address         String?
+  city            String?
+  lgpdConsent     Boolean       @default(false)
+  lgpdConsentAt   DateTime?
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+  motorcycles     Motorcycle[]
+  appointments    Appointment[]
+  serviceOrders   ServiceOrder[]
+}
+
+model Motorcycle {
+  id               String                @id @default(uuid())
+  customerId       String
+  customer         Customer              @relation(fields: [customerId], references: [id])
+  plate            String                @unique
+  chassi           String                @unique
+  brand            String
+  model            String
+  year             Int
+  cc               Int?
+  motorType        String?               // 2T/4T
+  color            String?
+  km               Int
+  createdAt        DateTime              @default(now())
+  updatedAt        DateTime              @updatedAt
+  serviceOrders    ServiceOrder[]
+  appointments     Appointment[]
+  reminders        MaintenanceReminder[]
+}
+
+model ServiceCatalog {
+  id        String             @id @default(uuid())
+  code      String             @unique
+  name      String
+  description String?          @db.Text
+  timeStd   Int                 // minutos
+  price     Decimal             @db.Decimal(10,2)
+  createdAt DateTime            @default(now())
+  updatedAt DateTime            @updatedAt
+  items     ServiceOrderItem[]
+}
+
+model PartCategory {
+  id        String   @id @default(uuid())
+  name      String   @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  parts     Part[]
+}
+
+model Part {
+  id           String             @id @default(uuid())
+  sku          String             @unique
+  name         String
+  categoryId   String?
+  category     PartCategory?      @relation(fields: [categoryId], references: [id])
+  brand        String?
+  app          String?            // aplicação/modelo
+  unit         String             @default("UN")
+  cost         Decimal            @db.Decimal(10,2)
+  price        Decimal            @db.Decimal(10,2)
+  qty          Decimal            @db.Decimal(10,3)
+  minQty       Decimal            @db.Decimal(10,3)
+  location     String?
+  createdAt    DateTime           @default(now())
+  updatedAt    DateTime           @updatedAt
+  items        ServiceOrderItem[]
+}
+
+model Supplier {
+  id        String   @id @default(uuid())
+  name      String
+  cnpj      String?  @unique
+  contact   String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Mechanic {
+  id           String       @id @default(uuid())
+  userId       String?      @unique
+  user         User?        @relation(fields: [userId], references: [id])
+  name         String
+  specialty    String?
+  active       Boolean      @default(true)
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+  serviceOrders ServiceOrder[]
+  appointments  Appointment[]
+  commissions   Commission[]
+}
+
+model ServiceOrder {
+  id               String             @id @default(uuid())
+  number           String             @unique
+  customerId       String
+  customer         Customer           @relation(fields: [customerId], references: [id])
+  motorcycleId     String
+  motorcycle       Motorcycle         @relation(fields: [motorcycleId], references: [id])
+  status           OrderStatus        @default(RASCUNHO)
+  kmEntry          Int?
+  kmExit           Int?
+  complaint        String?            @db.Text
+  diagnosis        String?            @db.Text
+  mechanicId       String?
+  mechanic         Mechanic?          @relation(fields: [mechanicId], references: [id])
+  bay              String?
+  valueTotal       Decimal            @default(0) @db.Decimal(10,2)
+  approvedAt       DateTime?
+  deliveredAt      DateTime?
+  notes            String?            @db.Text
+  createdAt        DateTime           @default(now())
+  updatedAt        DateTime           @updatedAt
+  items            ServiceOrderItem[]
+  statusHistory    StatusHistory[]
+  attachments      Attachment[]
+  payments         Payment[]
+  warranties       Warranty[]
+  commissions      Commission[]
+}
+
+model ServiceOrderItem {
+  id              String           @id @default(uuid())
+  serviceOrderId  String
+  serviceOrder    ServiceOrder     @relation(fields: [serviceOrderId], references: [id], onDelete: Cascade)
+  type            ItemType
+  serviceCatalogId String?
+  serviceCatalog   ServiceCatalog? @relation(fields: [serviceCatalogId], references: [id])
+  partId          String?
+  part            Part?            @relation(fields: [partId], references: [id])
+  qty             Decimal          @db.Decimal(10,3)
+  unitPrice       Decimal          @db.Decimal(10,2)
+  discount        Decimal          @default(0) @db.Decimal(10,2)
+  total           Decimal          @db.Decimal(10,2)
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+  commissions     Commission[]
+  warranties      Warranty[]
+}
+
+model StatusHistory {
+  id             String       @id @default(uuid())
+  serviceOrderId String
+  serviceOrder   ServiceOrder @relation(fields: [serviceOrderId], references: [id], onDelete: Cascade)
+  fromStatus     OrderStatus?
+  toStatus       OrderStatus
+  userId         String?
+  reason         String?      @db.Text
+  createdAt      DateTime     @default(now())
+}
+
+model Appointment {
+  id            String        @id @default(uuid())
+  customerId    String
+  customer      Customer      @relation(fields: [customerId], references: [id])
+  motorcycleId  String
+  motorcycle    Motorcycle    @relation(fields: [motorcycleId], references: [id])
+  serviceId     String?
+  date          DateTime
+  time          String?
+  bay           String?
+  mechanicId    String?
+  mechanic      Mechanic?     @relation(fields: [mechanicId], references: [id])
+  status        String        @default("confirmado")
+  notes         String?       @db.Text
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+}
+
+model Commission {
+  id                 String           @id @default(uuid())
+  mechanicId         String
+  mechanic           Mechanic         @relation(fields: [mechanicId], references: [id])
+  serviceOrderId     String
+  serviceOrder       ServiceOrder     @relation(fields: [serviceOrderId], references: [id])
+  serviceOrderItemId String?
+  serviceOrderItem   ServiceOrderItem? @relation(fields: [serviceOrderItemId], references: [id])
+  amount             Decimal          @db.Decimal(10,2)
+  paidAt             DateTime?
+  createdAt          DateTime         @default(now())
+  updatedAt          DateTime         @updatedAt
+}
+
+model Payment {
+  id             String        @id @default(uuid())
+  serviceOrderId String
+  serviceOrder   ServiceOrder  @relation(fields: [serviceOrderId], references: [id])
+  method         PaymentMethod
+  amount         Decimal       @db.Decimal(10,2)
+  paidAt         DateTime      @default(now())
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+}
+
+model Warranty {
+  id                 String           @id @default(uuid())
+  serviceOrderId     String
+  serviceOrder       ServiceOrder     @relation(fields: [serviceOrderId], references: [id])
+  serviceOrderItemId String?
+  serviceOrderItem   ServiceOrderItem? @relation(fields: [serviceOrderItemId], references: [id])
+  type               WarrantyType
+  startDate          DateTime         @default(now())
+  endDate            DateTime?
+  endKm              Int?
+  active             Boolean          @default(true)
+  notes              String?          @db.Text
+  createdAt          DateTime         @default(now())
+  updatedAt          DateTime         @updatedAt
+}
+
+model MaintenancePlan {
+  id           String                @id @default(uuid())
+  name         String
+  modelPattern String?
+  ccFrom       Int?
+  ccTo         Int?
+  motorType    String?
+  intervalKm   Int
+  intervalMonths Int?
+  item         String
+  createdAt    DateTime              @default(now())
+  updatedAt    DateTime              @updatedAt
+  reminders    MaintenanceReminder[]
+}
+
+model MaintenanceReminder {
+  id                 String                @id @default(uuid())
+  motorcycleId       String
+  motorcycle         Motorcycle            @relation(fields: [motorcycleId], references: [id])
+  maintenancePlanId  String
+  maintenancePlan    MaintenancePlan       @relation(fields: [maintenancePlanId], references: [id])
+  lastKm             Int
+  dueKm              Int
+  currentKm          Int
+  status             ReminderStatus
+  notifiedAt         DateTime?
+  createdAt          DateTime              @default(now())
+  updatedAt          DateTime              @updatedAt
+}
+
+model Attachment {
+  id             String         @id @default(uuid())
+  serviceOrderId String
+  serviceOrder   ServiceOrder   @relation(fields: [serviceOrderId], references: [id], onDelete: Cascade)
+  type           AttachmentType
+  url            String
+  filename       String
+  mime           String
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+}
+
+model Notification {
+  id        String               @id @default(uuid())
+  channel   NotificationChannel
+  to        String
+  template  String?
+  payload   Json?
+  status    NotificationStatus   @default(PENDING)
+  sentAt    DateTime?
+  createdAt DateTime             @default(now())
+  updatedAt DateTime             @updatedAt
+}
+
+model AuditLog {
+  id         String   @id @default(uuid())
+  userId     String?
+  user       User?    @relation(fields: [userId], references: [id])
+  action     String
+  resource   String
+  resourceId String?
+  ip         String?
+  metadata   Json?
+  createdAt  DateTime @default(now())
+}

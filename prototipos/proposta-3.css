@@ -1,0 +1,58 @@
+/* =====================================================================
+   PROPOSTA 3 — "Garage Flow" (Moderno SaaS)
+   Fundo claro suave, navegação horizontal, cartões arredondados, kanban.
+   ===================================================================== */
+:root {
+  --bg: #fafafb;
+  --surface: #ffffff;
+  --surface-2: #f4f4f6;
+  --text: #14171a;
+  --muted: #5b6470;
+  --border: #ecedef;
+  --accent: #f97316;
+  --accent-strong: #c2410c;
+  --accent-contrast: #ffffff;
+  --accent-tint: #fff1e6;
+  --focus: #c2410c;
+  --radius: 14px;
+  --radius-sm: 10px;
+  --radius-lg: 20px;
+  --shadow: 0 4px 16px rgba(16, 20, 26, .06);
+  --shadow-lg: 0 12px 32px rgba(16, 20, 26, .12);
+  --sidebar-bg: #ffffff;
+}
+
+body { background: radial-gradient(1200px 500px at 100% -10%, #fff5ec 0%, var(--bg) 45%); }
+
+/* Navegação horizontal com pílula ativa */
+.topbar-main { gap: 22px; padding: 14px 28px; border-bottom: 1px solid var(--border); background: rgba(255,255,255,.85); backdrop-filter: blur(8px); }
+.hnav { gap: 6px; }
+.hnav .nav-item { border-radius: 999px; color: var(--muted); font-weight: 600; padding: 8px 14px; }
+.hnav .nav-item:hover { background: var(--surface-2); }
+.hnav .nav-item.is-active { background: var(--accent-tint); color: var(--accent-strong); }
+.hnav .nav-icon { display: none; }
+.hnav .nav-badge { background: var(--accent-strong); }
+
+/* Cartões macios e arejados */
+.card { box-shadow: var(--shadow); }
+.card:hover { box-shadow: var(--shadow-lg); transition: box-shadow .18s ease; }
+.card-head { border-bottom: 1px solid var(--border); padding: 16px 20px; }
+.card-body { padding: 20px; }
+.kpi { border-radius: var(--radius-lg); }
+.kpi-value { color: #14171a; }
+
+/* Kanban como herói */
+.kanban { gap: 18px; }
+.kcol { background: transparent; border: 1px dashed var(--border); border-radius: var(--radius-lg); padding: 12px; }
+.kcol-head h2 { font-size: 13px; }
+.kcard { border-radius: var(--radius); border-color: var(--border); box-shadow: var(--shadow); }
+.kcard:hover { transform: translateY(-2px); transition: transform .16s ease, box-shadow .16s ease; box-shadow: var(--shadow-lg); border-color: var(--accent); }
+
+/* Chips e badges em pílula */
+.chip { border-radius: 999px; }
+.badge { border-radius: 999px; background: var(--surface-2); }
+.btn { border-radius: 999px; }
+.btn--primary { background: var(--accent-strong); box-shadow: 0 4px 12px rgba(194, 65, 12, .22); }
+.search input { border-radius: 999px; }
+.icon-btn { border-radius: 999px; }
+.avatar { border-radius: 50%; }
