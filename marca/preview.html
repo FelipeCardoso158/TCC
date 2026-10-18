@@ -1,0 +1,213 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SGOM — Marca / Preview</title>
+<link rel="icon" type="image/svg+xml" href="../favicon.svg">
+<style>
+  :root{
+    --accent:#f97316; --accent-strong:#c2410c; --dark:#14171a;
+    --bg:#f4f5f7; --line:#e1e4e8; --muted:#6b7280; --white:#fff;
+    --mono:#14171a;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--dark);
+    font-family:system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif;
+    font-size:14px;line-height:1.5}
+  header.page{background:var(--dark);color:#fff;padding:26px 32px}
+  header.page h1{margin:0 0 6px;font-size:22px;letter-spacing:.1em;font-weight:800}
+  header.page p{margin:0;color:#9aa3ad;font-size:13px}
+  main{padding:24px 32px 64px;max-width:1200px}
+  h2{font-size:13px;letter-spacing:.14em;text-transform:uppercase;
+     color:var(--muted);margin:34px 0 12px;font-weight:700}
+  h3{font-size:12px;color:var(--muted);margin:16px 0 8px;font-weight:600}
+  .row{display:flex;flex-wrap:wrap;gap:14px;align-items:flex-end}
+  .card{border:1px solid var(--line);border-radius:12px;overflow:hidden;background:#fff}
+  .stage{display:flex;align-items:center;justify-content:center;padding:20px;min-height:72px}
+  .stage.dark{background:var(--dark)}
+  .stage.light{background:var(--bg)}
+  .stage.accent{background:var(--accent)}
+  .stage.white{background:#fff}
+  .stage.orange-line{box-shadow:inset 0 0 0 1px rgba(0,0,0,.08)}
+  .label{font-size:11px;color:var(--muted);padding:7px 10px;border-top:1px solid var(--line);background:#fff;white-space:nowrap}
+  .swatches{display:flex;gap:10px;flex-wrap:wrap}
+  .sw{width:150px;border:1px solid var(--line);border-radius:10px;overflow:hidden;background:#fff}
+  .sw .chip{height:56px}
+  .sw .meta{font-size:11px;padding:8px 10px;color:var(--muted)}
+  .sw .meta b{display:block;color:var(--dark);font-size:12px}
+  /* lockups */
+  .lockup-login{background:var(--dark);border-radius:12px;padding:26px 30px;width:420px;color:#fff}
+  .lockup-login .head{display:flex;flex-direction:column;align-items:center;gap:0;text-align:center}
+  .lockup-login .brand-mark{display:flex;align-items:center;justify-content:center;margin-bottom:14px}
+  .lockup-login .wordmark{font-size:34px;font-weight:800;letter-spacing:.1em;line-height:1.05}
+  .lockup-login .sub{color:#8b949e;font-size:12px;margin-top:6px}
+  .lockup-topbar{background:var(--dark);border-radius:12px;padding:0 16px;height:58px;
+    display:flex;align-items:center;gap:12px;width:520px;color:#fff}
+  .lockup-topbar .brand-mark{display:flex;align-items:center}
+  .lockup-topbar .wordmark{font-size:15px;font-weight:800;letter-spacing:.1em}
+  .lockup-topbar .sub{font-size:12px;color:#8b949e;margin-top:2px}
+  .lockup-topbar .nav{margin-left:auto;display:flex;gap:14px;color:#8b949e;font-size:12px}
+  .favtab{display:flex;align-items:center;gap:9px;background:#fff;border:1px solid var(--line);
+    border-radius:9px;padding:9px 14px 9px 11px;width:300px;box-shadow:0 1px 2px rgba(0,0,0,.05)}
+  .favtab img{width:16px;height:16px;border-radius:3px}
+  .favtab .t{font-size:13px;color:var(--dark)}
+  .favtab .u{font-size:11px;color:var(--muted)}
+  .note{font-size:12px;color:var(--muted);margin-top:10px;max-width:760px}
+  code{background:#eceef1;border:1px solid var(--line);border-radius:4px;padding:1px 5px;font-size:12px}
+  .err{color:#b91c1c}
+  .ok{color:#15803d}
+</style>
+</head>
+<body>
+<header class="page">
+  <h1>SGOM · MARCA</h1>
+  <p>Concept A — "S em curso". Galeria de validação: <code>marca/brand.js</code> é a fonte única.
+     Para trocar a logo, edite <code>brand.js</code> e recarregue esta página.</p>
+</header>
+
+<main>
+  <div id="health"></div>
+
+  <h2>1 · Grande (variant <code>full</code> — riscos para fora do badge)</h2>
+  <div class="row" id="g-full"></div>
+
+  <h2>2 · Grande (variant <code>compact</code> — badge cheio)</h2>
+  <div class="row" id="g-compact"></div>
+
+  <h2>3 · Tamanhos reais de uso (topbar 34 · login 48 · ícone 26 · 20 · 16)</h2>
+  <div class="row" id="g-sizes"></div>
+
+  <h2>4 · Variantes de tom (sobre qualquer fundo)</h2>
+  <div class="row" id="g-tones"></div>
+
+  <h2>5 · Lockups de aplicação</h2>
+  <div class="row" style="align-items:flex-start">
+    <div>
+      <h3>Tela de login (badge 48)</h3>
+      <div class="lockup-login">
+        <div class="head">
+          <span class="brand-mark" id="lk-login"></span>
+          <span class="wordmark">SGOM</span>
+        </div>
+        <div class="sub" style="text-align:center">Sistema de Gerenciamento para Oficina de Motos</div>
+      </div>
+    </div>
+    <div>
+      <h3>Topbar (badge 34)</h3>
+      <div class="lockup-topbar">
+        <span class="brand-mark" id="lk-topbar"></span>
+        <span>
+          <span class="wordmark">SGOM</span>
+          <div class="sub">Oficina</div>
+        </span>
+        <span class="nav"><span>Ordens</span><span>Clientes</span><span>Estoque</span></span>
+      </div>
+      <h3>Favicon 16 / 32 (arquivo <code>../favicon.svg</code>)</h3>
+      <div class="favtab"><img src="../favicon.svg" width="16" height="16" alt="">
+        <span><span class="t">SGOM — Painel</span><br><span class="u">sgom.local/#painel</span></span>
+      </div>
+      <div class="row" style="margin-top:12px;gap:18px;align-items:flex-end" id="fav-sizes"></div>
+    </div>
+  </div>
+
+  <h2>6 · Tokens (paleta)</h2>
+  <div class="swatches" id="g-colors"></div>
+
+  <p class="note">Falhas de carregamento aparecem em <span class="err">vermelho</span> no topo desta página
+    (se <code>brand.js</code> não carregar, o app usa o fallback <code>icon("bike")</code>).</p>
+</main>
+
+<script src="brand.js"></script>
+<script>
+(function () {
+  "use strict";
+  var health = document.getElementById("health");
+  function fail(msg) {
+    health.innerHTML = '<p class="err" style="margin:14px 0 0"><b>Erro:</b> ' + msg + "</p>";
+  }
+  if (typeof window.SGOM_brandMark !== "function") {
+    fail('window.SGOM_brandMark não existe — confira <code>marca/brand.js</code>.');
+    return;
+  }
+  var B = window.SGOM_BRAND;
+
+  function el(html) {
+    var d = document.createElement("div");
+    d.innerHTML = html.trim();
+    return d.firstChild;
+  }
+  function card(stage, inner, label) {
+    return el(
+      '<div class="card"><div class="stage ' + stage + '">' + inner +
+      '</div><div class="label">' + label + "</div></div>"
+    );
+  }
+
+  /* 1 e 2 — grandes */
+  var bgs = [
+    ["dark", "fundo escuro #14171a"],
+    ["light", "fundo claro #f4f5f7"],
+    ["accent", "fundo laranja #f97316"],
+    ["white", "fundo branco"]
+  ];
+  var gFull = document.getElementById("g-full");
+  var gCompact = document.getElementById("g-compact");
+  [128, 256].forEach(function (px) {
+    bgs.forEach(function (b) {
+      gFull.appendChild(card(b[0], window.SGOM_brandMark(px, { variant: "full" }), px + "px · full · " + b[1]));
+      gCompact.appendChild(card(b[0], window.SGOM_brandMark(px, { variant: "compact" }), px + "px · compact · " + b[1]));
+    });
+  });
+
+  /* 3 — tamanhos reais */
+  var sizes = [
+    [34, "topbar (.topbar .brand-mark)"],
+    [48, "login (.login-head .brand-mark)"],
+    [26, "ícone médio"],
+    [20, "ícone pequeno"],
+    [16, "mínimo / aba"]
+  ];
+  var gSizes = document.getElementById("g-sizes");
+  sizes.forEach(function (s) {
+    ["dark", "white"].forEach(function (bg) {
+      gSizes.appendChild(card(bg, window.SGOM_brandMark(s[0]), s[0] + "px · " + s[1] + " · " + bg));
+    });
+  });
+
+  /* 4 — tons */
+  var tones = [
+    ["color", "color (padrão)"],
+    ["mono-white", "mono-white (sobre escuro)"],
+    ["mono-dark", "mono-dark (sobre claro)"]
+  ];
+  var gTones = document.getElementById("g-tones");
+  tones.forEach(function (t) {
+    ["dark", "white", "accent"].forEach(function (bg) {
+      gTones.appendChild(card(bg, window.SGOM_brandMark(64, { tone: t[0] }), 64 + "px · " + t[1] + " · " + bg));
+    });
+  });
+
+  /* 5 — lockups */
+  document.getElementById("lk-login").innerHTML = window.SGOM_brandMark(48);
+  document.getElementById("lk-topbar").innerHTML = window.SGOM_brandMark(34);
+  var favs = document.getElementById("fav-sizes");
+  [16, 32, 48].forEach(function (px) {
+    favs.appendChild(card("white", '<img src="../favicon.svg" width="' + px + '" height="' + px + '" alt="">', px + "px · favicon.svg"));
+  });
+
+  /* 6 — tokens */
+  var gc = document.getElementById("g-colors");
+  Object.keys(B.colors).forEach(function (k) {
+    gc.appendChild(el(
+      '<div class="sw"><div class="chip" style="background:' + B.colors[k] + '"></div>' +
+      '<div class="meta"><b>' + k + "</b>" + B.colors[k] + "</div></div>"
+    ));
+  });
+
+  health.innerHTML = '<p class="ok" style="margin:14px 0 0">brand.js carregado · v' +
+    B.version + " · " + B.concept + "</p>";
+})();
+</script>
+</body>
+</html>

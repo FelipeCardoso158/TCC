@@ -23,12 +23,13 @@ use o botão **Restaurar dados de exemplo** dentro do sistema.
 | Funcionário | `funcionario@sgom` | `sgom123` |
 | Cliente | `joao@email.com` | `123` |
 
-O cliente também pode se **autocadastrar** pela tela de login (aba **Cliente**).
+Aba **Cliente** tem duas ações: **Entrar** (se já tem conta) e **Criar conta** (autocadastro).
+Aba **Funcionário** tem apenas **Entrar**.
 
 ### O que dá para fazer no protótipo
 
-- **Funcionário:** dashboard, orçamentos, atendimentos (kanban), estoque, clientes e serviços.
-- **Cliente:** acompanhar suas O.S. e **aprovar/reprovar** orçamentos.
+- **Funcionário:** dashboard, orçamentos, atendimentos (kanban), estoque, clientes, serviços e **Funcionários** (criar contas de acesso, restrito a quem já está logado).
+- **Cliente:** cadastrar-se, entrar, acompanhar suas O.S. e **aprovar/reprovar (com motivo)** orçamentos.
 - Regras centrais: bloqueio de peça sem estoque, **reserva** ao aprovar, **baixa** ao entregar,
   `Aguardando Peça` apenas quando há peça pendente, validade do orçamento, desconto livre.
 
@@ -42,10 +43,22 @@ O cliente também pode se **autocadastrar** pela tela de login (aba **Cliente**)
 
 | Arquivo | Papel |
 |---|---|
-| `index.html` | Página de entrada (shell). |
+| `index.html` | Página de entrada (shell). Liga o favicon e a marca. |
 | `styles.css` | Tema visual (preto + laranja), responsivo. |
 | `dados.js` | Dados de exemplo (`window.SGOM_SEED`). |
 | `app.js` | Telas, navegação e regras de negócio. |
+| `favicon.svg` | Ícone da aba (SVG autocontido). |
+| `marca/brand.js` | **Fonte única da marca** (logo, cores, variantes). |
+| `marca/preview.html` | Galeria para validar/trocar a logo. |
+| `marca/sync-favicon.js` | Regenera o `favicon.svg` a partir do `brand.js`. |
+| `docs/marca.md` | Guia da marca + passo a passo para trocar a logo. |
+
+### Marca (logo)
+
+A logo ("S em curso") é desenhada por código em `marca/brand.js`. Para **ver** a
+galeria de tamanhos/fundos/variantes, abra `marca/preview.html`. Para **trocar ou
+melhorar** a logo, siga `docs/marca.md` — em regra, edita-se só `marca/brand.js` e
+depois roda `node marca/sync-favicon.js` (o favicon espelha a arte).
 
 ## 4. Próximos passos (implementação real)
 

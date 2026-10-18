@@ -37,7 +37,7 @@
   }
 
   var db = loadDB();
-  var state = { view: null, modal: null, openOrderId: null, orcTab: "ativos", loginTab: "staff" };
+  var state = { view: null, modal: null, openOrderId: null, orcTab: "ativos", loginTab: "staff", clientMode: "entrar" };
 
   /* ============================================================
      2. Utilitarios
@@ -166,7 +166,7 @@
     });
   }
 
-  function setStatus(os, to) {
+  function setStatus(os, to, meta) {
     var from = os.status;
     if (to === "AGUARDANDO_APROVACAO" && os.items.length === 0) { toast("Adicione ao menos um item antes de enviar.", "err"); return false; }
     if (to === "APROVADA") { os.reserved = true; os.approvedAt = nowLocal(); }
@@ -174,6 +174,10 @@
     if (to === "PRONTO" && !os.finishedAt) os.finishedAt = nowLocal();
     if (to === "ENTREGUE") { deliverStock(os); os.deliveredAt = nowLocal(); os.reserved = false; }
     if (to === "CANCELADO" || to === "REPROVADO") os.reserved = false;
+    if (to === "REPROVADO") {
+      os.rejectReason = (meta && meta.reason) || "";
+      os.rejectedAt = nowLocal();
+    }
     os.status = to;
     persist();
     return true;
@@ -225,7 +229,7 @@
     app.innerHTML =
       '<div class="login-wrap"><div class="login-card">' +
         '<div class="login-head">' +
-          '<span class="brand-mark">' + icon("bike", 26) + '</span>' +
+          '<span class="brand-mark">' + brandMark(48) + '</span>' +
           '<h1>SGOM</h1>' +
           '<p>Sistema de Gerenciamento para Oficina de Motos</p>' +
         '</div>' +
@@ -248,13 +252,32 @@
       '</form>';
   }
   function loginClientHTML() {
-    return '<form id="form-login-client" autocomplete="off">' +
-      '<p class="muted" style="font-size:13px;margin-top:0">Entre com seu e-mail. Se ainda não tem conta, ela é criada na hora.</p>' +
-      field("Nome (para criar conta)", '<input name="name" placeholder="Seu nome">') +
+    var isSignup = state.clientMode === "cadastro";
+    var subToggle =
+      '<div class="tabs" style="margin-bottom:14px">' +
+        '<button type="button" data-act="client-mode" data-mode="entrar" class="' + (isSignup ? "" : "active") + '">Entrar</button>' +
+        '<button type="button" data-act="client-mode" data-mode="cadastro" class="' + (isSignup ? "active" : "") + '">Criar conta</button>' +
+      '</div>';
+
+    if (isSignup) {
+      return subToggle +
+        '<form id="form-signup-client" autocomplete="off">' +
+        '<p class="muted" style="font-size:13px;margin-top:0">Crie sua conta para acompanhar suas O.S. e aprovar orçamentos.</p>' +
+        field("Nome", '<input name="name" required placeholder="Seu nome completo">') +
+        field("E-mail", '<input name="email" type="email" required placeholder="voce@email.com">') +
+        field("Telefone", '<input name="phone" placeholder="(11) 90000-0000">') +
+        field("Senha", '<input name="password" type="password" required placeholder="mínimo de 4 caracteres">') +
+        field("Confirmar senha", '<input name="password2" type="password" required placeholder="digite a senha novamente">') +
+        '<button class="btn btn--primary" style="width:100%" type="submit">Criar conta e entrar</button>' +
+        '<div class="hint">Já tem conta? Clique em <strong>Entrar</strong> acima.</div>' +
+        '</form>';
+    }
+
+    return subToggle +
+      '<form id="form-login-client" autocomplete="off">' +
       field("E-mail", '<input name="email" type="email" required placeholder="voce@email.com">') +
-      field("Telefone", '<input name="phone" placeholder="(11) 90000-0000">') +
-      field("Senha", '<input name="password" type="password" required placeholder="escolha uma senha">') +
-      '<button class="btn btn--primary" style="width:100%" type="submit">Entrar / Criar conta</button>' +
+      field("Senha", '<input name="password" type="password" required placeholder="sua senha">') +
+      '<button class="btn btn--primary" style="width:100%" type="submit">Entrar</button>' +
       '<div class="hint">Dica: para ver O.S. de exemplo, entre com <code>joao@email.com</code> / <code>123</code>.</div>' +
       '</form>';
   }
@@ -262,6 +285,15 @@
   function field(label, input, hint) {
     return '<div class="field"><label>' + esc(label) + (hint ? ' <span class="muted">(' + esc(hint) + ')</span>' : "") + '</label>' + input + '</div>';
   }
+  /* Logo da marca (fonte unica: marca/brand.js).
+     Fallback: se brand.js nao carregar, mantem o icone antigo. */
+  function brandMark(size) {
+    if (typeof window.SGOM_brandMark === "function") {
+      return window.SGOM_brandMark(size, { variant: "compact", tone: "color" });
+    }
+    return icon("bike", Math.max(16, Math.round(size * 0.55)));
+  }
+
   function icon(name, size) {
     var paths = {
       bike: '<circle cx="18.5" cy="17.5" r="3.5"/><circle cx="5.5" cy="17.5" r="3.5"/><circle cx="15" cy="5" r="1"/><path d="M12 17.5V14l-3-3 4-3 2 3h2"/>',
@@ -269,6 +301,7 @@
       gauge: '<path d="M12 14l4-4"/><path d="M3.34 19a10 10 0 1 1 17.32 0"/>',
       box: '<path d="m7.5 4.27 9 5.15"/><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"/><path d="m3.3 7 8.7 5 8.7-5"/><path d="M12 22V12"/>',
       users: '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/>',
+      badge: '<rect x="3" y="7" width="18" height="13" rx="2"/><circle cx="9" cy="12" r="2.5"/><path d="M5.5 17.5h7"/><path d="M15.5 11.5h3.5"/><path d="M15.5 15h3.5"/>',
       list: '<path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/>',
       file: '<path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7z"/><path d="M14 2v5h5"/>',
       settings: '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06A1.65 1.65 0 0 0 15 19.4a1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.6 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.6a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>',
@@ -289,7 +322,8 @@
     { id: "os", label: "Atendimentos (O.S.)", icon: "wrench" },
     { id: "estoque", label: "Estoque", icon: "box" },
     { id: "clientes", label: "Clientes", icon: "users" },
-    { id: "servicos", label: "Serviços", icon: "list" }
+    { id: "servicos", label: "Serviços", icon: "list" },
+    { id: "funcionarios", label: "Funcionários", icon: "badge" }
   ];
   function defaultView(user) { return user.role === "CLIENTE" ? "minhasos" : "dashboard"; }
 
@@ -299,7 +333,7 @@
     }).join("");
     return '<header class="topbar">' +
       '<a class="brand" href="#inicio" data-act="nav" data-view="' + defaultView(user) + '">' +
-        '<span class="brand-mark">' + icon("bike", 20) + '</span>' +
+        '<span class="brand-mark">' + brandMark(34) + '</span>' +
         '<span><strong>SGOM</strong><span>Oficina de Motos</span></span>' +
       '</a>' +
       '<nav aria-label="Navegação principal">' + nav + '</nav>' +
@@ -311,7 +345,7 @@
 
   function renderStaffApp(user) {
     if (!state.view) state.view = "dashboard";
-    var views = { dashboard: viewDashboard, orcamentos: viewOrcamentos, os: viewOS, estoque: viewEstoque, clientes: viewClientes, servicos: viewServicos };
+    var views = { dashboard: viewDashboard, orcamentos: viewOrcamentos, os: viewOS, estoque: viewEstoque, clientes: viewClientes, servicos: viewServicos, funcionarios: viewFuncionarios };
     var build = views[state.view] || viewDashboard;
     document.getElementById("app").innerHTML =
       '<div class="app">' + topbar(user, STAFF_NAV, state.view) + '<div class="content">' + build(user) + '</div></div>';
@@ -521,6 +555,21 @@
       }).join("") + '</tbody></table></div></section>';
   }
 
+  /* ---------------- Funcionarios ---------------- */
+  function viewFuncionarios() {
+    var staff = db.users.filter(function (u) { return u.role === "FUNCIONARIO"; });
+    return viewHead("Funcionários", "Contas de acesso ao sistema (criação restrita a funcionários)",
+      '<button class="btn btn--primary" data-act="new-staff">' + icon("plus", 16) + ' Novo funcionário</button>') +
+      '<section class="card"><div class="card-body" style="padding:0">' +
+      (staff.length
+        ? '<table><thead><tr><th>Nome</th><th>E-mail</th></tr></thead><tbody>' +
+          staff.map(function (u) {
+            return '<tr><td><strong>' + esc(u.name) + '</strong></td><td>' + esc(u.email) + '</td></tr>';
+          }).join("") + '</tbody></table>'
+        : '<div class="empty">Nenhum funcionário cadastrado.</div>') +
+      '</div></section>';
+  }
+
   /* ============================================================
      7. Modal da O.S. / Orcamento
      ============================================================ */
@@ -545,6 +594,7 @@
         infoBox("Validade do orçamento", os.validUntil ? fmtDate(os.validUntil) : "-") +
       '</div>' +
       (isExpired(os) ? '<div class="alert alert--err">Este orçamento venceu em ' + fmtDate(os.validUntil) + ' e por isso aparece em <strong>Cancelados</strong>.</div>' : "") +
+      (os.rejectReason ? '<div class="alert alert--err"><strong>Reprovado em ' + fmtDateTime(os.rejectedAt) + '</strong> — ' + esc(os.rejectReason) + '</div>' : "") +
       '<h3 style="margin:18px 0 8px">Itens</h3>' +
       itemsTable(os, editable) +
       (editable ? addItemForm(os) : "") +
@@ -690,6 +740,19 @@
     openModal(modalShell("Nova peça", body,
       '<button class="btn" data-act="close-modal">Cancelar</button><button class="btn btn--primary" data-act="submit-form" data-form="form-new-part">Salvar</button>'));
   }
+  function newStaffModal() {
+    var body = '<form id="form-new-staff">' +
+      field("Nome", '<input name="name" required placeholder="Nome completo">') +
+      field("E-mail", '<input name="email" type="email" required placeholder="funcionario@sgom">') +
+      '<div class="row2">' +
+        field("Senha", '<input name="password" type="password" required placeholder="mínimo de 4 caracteres">') +
+        field("Confirmar senha", '<input name="password2" type="password" required placeholder="digite novamente">') +
+      '</div>' +
+      '<div class="alert alert--info">Novo funcionário poderá entrar no sistema e gerenciar a oficina.</div>' +
+      '</form>';
+    openModal(modalShell("Novo funcionário", body,
+      '<button class="btn" data-act="close-modal">Cancelar</button><button class="btn btn--primary" data-act="submit-form" data-form="form-new-staff">Criar</button>'));
+  }
   function modalShell(title, body, foot) {
     return '<div class="modal-back" data-act="close-modal-bg"><div class="modal">' +
       '<div class="modal-head"><h2 class="card-title">' + esc(title) + '</h2>' +
@@ -697,6 +760,18 @@
       '<div class="modal-body">' + body + '</div>' +
       (foot ? '<div class="modal-foot">' + foot + '</div>' : "") + '</div></div>';
   }
+  function rejectModalHTML(os) {
+    var body =
+      '<form id="form-reject" data-id="' + os.id + '">' +
+        '<div class="alert alert--info">O.S. <strong>' + esc(os.number) + '</strong> · Total <strong>' + money(orderTotal(os)) + '</strong>. ' +
+        'A reprovação encerra este orçamento (estado final) e o funcionário verá o motivo.</div>' +
+        field("Motivo da reprovação", '<textarea id="f-reject-reason" name="reason" rows="3" maxlength="300" required placeholder="Ex.: valor acima do esperado, quero orçamento separado..."></textarea>') +
+      '</form>';
+    return modalShell("Reprovar orçamento", body,
+      '<button class="btn" data-act="close-modal">Cancelar</button>' +
+      '<button class="btn btn--primary" data-act="confirm-reject" data-id="' + os.id + '">Confirmar reprovação</button>');
+  }
+
   function formToObject(form) {
     var o = {};
     Array.prototype.forEach.call(form.elements, function (el) {
@@ -714,7 +789,8 @@
     if (!el) return;
     var act = el.getAttribute("data-act");
 
-    if (act === "login-tab") { state.loginTab = el.getAttribute("data-tab"); renderLogin(); return; }
+    if (act === "login-tab") { state.loginTab = el.getAttribute("data-tab"); state.clientMode = "entrar"; renderLogin(); return; }
+    if (act === "client-mode") { state.clientMode = el.getAttribute("data-mode") === "cadastro" ? "cadastro" : "entrar"; renderLogin(); return; }
     if (act === "nav") { e.preventDefault(); navigate(el.getAttribute("data-view")); return; }
     if (act === "logout") { setSession(null); state.view = null; render(); return; }
     if (act === "orc-tab") { state.orcTab = el.getAttribute("data-tab"); render(); return; }
@@ -730,6 +806,7 @@
     if (act === "new-moto") { newMotoModal(el.getAttribute("data-id")); return; }
     if (act === "new-service") { newServiceModal(); return; }
     if (act === "new-part") { newPartModal(); return; }
+    if (act === "new-staff") { newStaffModal(); return; }
 
     if (act === "submit-form") {
       var form = document.getElementById(el.getAttribute("data-form"));
@@ -741,11 +818,25 @@
       var os = findOrder(el.getAttribute("data-id"));
       var to = el.getAttribute("data-to");
       if (!os) return;
-      if ((to === "CANCELADO" || to === "REPROVADO") && !window.confirm("Confirmar mudança para \"" + (STATUS[to] ? STATUS[to].label : to) + "\"?")) return;
+      if (to === "REPROVADO") { openModal(rejectModalHTML(os)); return; }
+      if (to === "CANCELADO" && !window.confirm("Confirmar mudança para \"" + (STATUS[to] ? STATUS[to].label : to) + "\"?")) return;
       if (setStatus(os, to)) {
         toast("O.S. " + os.number + " → " + (STATUS[to] ? STATUS[to].label : to));
         if (to === "ENTREGUE" || to === "CANCELADO" || to === "REPROVADO") closeModal();
         else render();
+      }
+      return;
+    }
+
+    if (act === "confirm-reject") {
+      var osr = findOrder(el.getAttribute("data-id"));
+      if (!osr) return;
+      var ta = document.getElementById("f-reject-reason");
+      var reason = ta ? String(ta.value || "").trim() : "";
+      if (!reason) { toast("Informe o motivo da reprovação.", "err"); if (ta) ta.focus(); return; }
+      if (setStatus(osr, "REPROVADO", { reason: reason })) {
+        toast("O.S. " + osr.number + " → Reprovado");
+        closeModal();
       }
       return;
     }
@@ -812,18 +903,27 @@
     if (form.id === "form-login-client") {
       var dc = formToObject(form);
       var email = (dc.email || "").toLowerCase();
-      var existing = db.users.filter(function (x) { return x.email.toLowerCase() === email; })[0];
-      if (existing) {
-        if (existing.role !== "CLIENTE" || existing.password !== dc.password) { toast("E-mail ou senha inválidos.", "err"); return; }
-        setSession({ userId: existing.id }); state.view = null; toast("Bem-vindo, " + existing.name + "!"); render();
-      } else {
-        if (!dc.name || dc.name.trim().length < 2) { toast("Informe seu nome para criar a conta.", "err"); return; }
-        var cust = { id: uid("c"), name: dc.name.trim(), email: dc.email, phone: dc.phone || "", doc: "", address: "", lgpd: true };
-        db.customers.push(cust);
-        var nu = { id: uid("u"), name: cust.name, email: dc.email, password: dc.password, role: "CLIENTE", customerId: cust.id };
-        db.users.push(nu);
-        persist(); setSession({ userId: nu.id }); state.view = null; toast("Conta criada. Bem-vindo!" ); render();
-      }
+      var u = db.users.filter(function (x) { return x.email.toLowerCase() === email && x.role === "CLIENTE"; })[0];
+      if (!u || u.password !== dc.password) { toast("E-mail ou senha inválidos.", "err"); return; }
+      setSession({ userId: u.id }); state.view = null; state.clientMode = "entrar";
+      toast("Bem-vindo, " + u.name + "!"); render();
+      return;
+    }
+
+    if (form.id === "form-signup-client") {
+      var ds = formToObject(form);
+      var emailS = (ds.email || "").toLowerCase();
+      if (!ds.name || ds.name.trim().length < 2) { toast("Informe seu nome.", "err"); return; }
+      if (!ds.password || ds.password.length < 4) { toast("A senha precisa de no mínimo 4 caracteres.", "err"); return; }
+      if (ds.password !== ds.password2) { toast("As senhas não conferem.", "err"); return; }
+      var dup = db.users.filter(function (x) { return x.email.toLowerCase() === emailS; })[0];
+      if (dup) { toast("E-mail já cadastrado. Use Entrar.", "err"); return; }
+      var custNew = { id: uid("c"), name: ds.name.trim(), email: ds.email, phone: ds.phone || "", doc: "", address: "", lgpd: true };
+      db.customers.push(custNew);
+      var nu = { id: uid("u"), name: custNew.name, email: ds.email, password: ds.password, role: "CLIENTE", customerId: custNew.id };
+      db.users.push(nu);
+      persist(); setSession({ userId: nu.id }); state.view = null; state.clientMode = "entrar";
+      toast("Conta criada. Bem-vindo, " + nu.name + "!"); render();
       return;
     }
 
@@ -901,6 +1001,20 @@
       db.parts.push({ id: uid("p"), sku: p.sku.toUpperCase(), name: p.name, brand: p.brand || "", unit: "UN",
         price: n2(p.price), qty: parseInt(p.qty, 10) || 0, minQty: parseInt(p.minQty, 10) || 0, location: p.location || "" });
       persist(); state.modal = null; toast("Peça cadastrada."); render();
+      return;
+    }
+
+    if (form.id === "form-new-staff") {
+      var st = formToObject(form);
+      var emailSt = (st.email || "").toLowerCase();
+      if (!st.name || st.name.trim().length < 2) { toast("Informe o nome do funcionário.", "err"); return; }
+      if (!emailSt) { toast("Informe o e-mail.", "err"); return; }
+      if (!st.password || st.password.length < 4) { toast("A senha precisa de no mínimo 4 caracteres.", "err"); return; }
+      if (st.password !== st.password2) { toast("As senhas não conferem.", "err"); return; }
+      var dupSt = db.users.filter(function (x) { return x.email.toLowerCase() === emailSt; })[0];
+      if (dupSt) { toast("E-mail já cadastrado. Use outro.", "err"); return; }
+      db.users.push({ id: uid("u"), name: st.name.trim(), email: st.email, password: st.password, role: "FUNCIONARIO" });
+      persist(); state.modal = null; toast("Funcionário " + st.name.trim() + " cadastrado."); render();
       return;
     }
   });

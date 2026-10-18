@@ -112,8 +112,19 @@ window.SGOM_SEED = {
       createdAt: "2026-10-17T11:30:00", startedAt: null,
       finishedAt: null, deliveredAt: null, validUntil: null,
       items: []
+    },
+    {
+      id: "o7", number: "OS-1007", customerId: "c1", motorcycleId: "m1",
+      status: "AGUARDANDO_APROVACAO", kmEntry: 24700, complaint: "Cabo de embreagem duro",
+      discount: 0, reserved: false,
+      createdAt: "2026-10-17T14:30:00", startedAt: null,
+      finishedAt: null, deliveredAt: null, validUntil: "2027-06-30",
+      items: [
+        { type: "LABOR", refId: "s4", name: "Regulagem de valvulas", qty: 1, unitPrice: 180 },
+        { type: "PART",  refId: "p6", name: "Cabo de embreagem", qty: 1, unitPrice: 40 }
+      ]
     }
   ],
 
-  seq: { order: 1007 }
+  seq: { order: 1008 }
 };
