@@ -24,6 +24,42 @@
     localStorage.setItem(DB_KEY, JSON.stringify(fresh));
     return fresh;
   }
+  function fixAccents(s) {
+    return String(s == null ? "" : s)
+      .replace(/\bOleo\b/g, "Óleo")
+      .replace(/\boleo\b/g, "óleo")
+      .replace(/\bRevisao\b/g, "Revisão")
+      .replace(/\brevisao\b/g, "revisão")
+      .replace(/\bValvulas\b/g, "Válvulas")
+      .replace(/\bvalvulas\b/g, "válvulas")
+      .replace(/\bRelacao\b/g, "Relação")
+      .replace(/\brelacao\b/g, "relação")
+      .replace(/\bInjecao\b/g, "Injeção")
+      .replace(/\binjecao\b/g, "injeção")
+      .replace(/\bIgnicao\b/g, "Ignição")
+      .replace(/\bignicao\b/g, "ignição")
+      .replace(/\bJoao\b/g, "João");
+  }
+  function fixField(owner, key) {
+    if (typeof owner[key] !== "string") return false;
+    var fixed = fixAccents(owner[key]);
+    if (fixed === owner[key]) return false;
+    owner[key] = fixed;
+    return true;
+  }
+  function migrateAccents() {
+    var changed = false;
+    (db.services || []).forEach(function (s) { changed = fixField(s, "name") || changed; });
+    (db.parts || []).forEach(function (p) { changed = fixField(p, "name") || changed; });
+    (db.users || []).forEach(function (u) { changed = fixField(u, "name") || changed; });
+    (db.customers || []).forEach(function (c) { changed = fixField(c, "name") || changed; });
+    (db.orders || []).forEach(function (o) {
+      changed = fixField(o, "complaint") || changed;
+      (o.items || []).forEach(function (i) { changed = fixField(i, "name") || changed; });
+    });
+    if (changed) persist();
+  }
+
   function persist() { localStorage.setItem(DB_KEY, JSON.stringify(db)); }
   function resetDB() { db = clone(window.SGOM_SEED); persist(); }
 
@@ -37,6 +73,7 @@
   }
 
   var db = loadDB();
+  migrateAccents();
   var state = { view: null, modal: null, openOrderId: null, orcTab: "ativos", loginTab: "staff", clientMode: "entrar" };
 
   /* ============================================================
@@ -124,6 +161,11 @@
     var part = findPart(partId);
     if (!part) return 0;
     return n2(part.qty) - reservedByPart(partId, null);
+  }
+  function ordersWithPart(partId) {
+    return db.orders.filter(function (o) {
+      return (o.items || []).some(function (i) { return i.type === "PART" && i.refId === partId; });
+    });
   }
 
   function isExpired(os) {
@@ -285,13 +327,9 @@
   function field(label, input, hint) {
     return '<div class="field"><label>' + esc(label) + (hint ? ' <span class="muted">(' + esc(hint) + ')</span>' : "") + '</label>' + input + '</div>';
   }
-  /* Logo da marca (fonte unica: marca/brand.js).
-     Fallback: se brand.js nao carregar, mantem o icone antigo. */
   function brandMark(size) {
-    if (typeof window.SGOM_brandMark === "function") {
-      return window.SGOM_brandMark(size, { variant: "compact", tone: "color" });
-    }
-    return icon("bike", Math.max(16, Math.round(size * 0.55)));
+    var s = Math.max(16, Math.round(Number(size) || 48));
+    return '<img src="logo-sgom.png" alt="Logo SGOM" width="' + s + '" height="' + s + '">';
   }
 
   function icon(name, size) {
@@ -521,7 +559,8 @@
           '<td class="num" style="' + (low ? "color:var(--err);font-weight:700" : "") + '">' + avail + (low ? " ⚠" : "") + '</td>' +
           '<td class="num">' + n2(p.minQty) + '</td>' +
           '<td style="white-space:nowrap"><button class="btn btn--sm" data-act="stock-move" data-id="' + p.id + '" data-dir="in">Entrada</button> ' +
-          '<button class="btn btn--sm" data-act="stock-move" data-id="' + p.id + '" data-dir="out">Saída</button></td>' +
+          '<button class="btn btn--sm" data-act="stock-move" data-id="' + p.id + '" data-dir="out">Saída</button> ' +
+          '<button class="btn btn--sm btn--danger" data-act="delete-part" data-id="' + p.id + '" title="Excluir peça">Excluir</button></td>' +
         '</tr>';
       }).join("") + '</tbody></table></div></section>';
   }
@@ -740,6 +779,49 @@
     openModal(modalShell("Nova peça", body,
       '<button class="btn" data-act="close-modal">Cancelar</button><button class="btn btn--primary" data-act="submit-form" data-form="form-new-part">Salvar</button>'));
   }
+  function stockMoveModal(partId, dir, error, qty) {
+    var part = findPart(partId);
+    if (!part) return "";
+    var isIn = dir === "in";
+    var value = (qty == null || qty === "") ? 1 : qty;
+    var body =
+      '<div class="stock-kind"><span class="badge ' + (isIn ? "badge--in" : "badge--out") + '">' + (isIn ? "Entrada" : "Saída") + '</span></div>' +
+      '<div class="stock-summary">' +
+        '<div class="stock-line"><span>Peça</span><strong>' + esc(part.name) + '</strong></div>' +
+        '<div class="stock-line"><span>SKU</span><strong>' + esc(part.sku) + '</strong></div>' +
+        '<div class="stock-line"><span>Estoque atual</span><strong>' + n2(part.qty) + ' un.</strong></div>' +
+        (isIn ? "" : '<div class="stock-line"><span>Disponível para saída</span><strong>' + availableForPart(part.id) + ' un.</strong></div>') +
+      '</div>' +
+      (error ? '<div class="alert alert--err">' + esc(error) + '</div>' : "") +
+      '<form id="form-stock-move" data-id="' + part.id + '" data-dir="' + (isIn ? "in" : "out") + '" novalidate>' +
+        field("Quantidade", '<input name="qty" type="number" min="1" step="1" inputmode="numeric" value="' + esc(value) + '" autofocus>') +
+        '<p class="stock-hint">' + (isIn ? "A quantidade será somada ao estoque atual." : "A quantidade será subtraída do estoque e não pode ultrapassar o disponível.") + '</p>' +
+      '</form>';
+    return modalShell(
+      isIn ? "Entrada de estoque" : "Saída de estoque",
+      body,
+      '<button class="btn" data-act="close-modal">Cancelar</button>' +
+      '<button class="btn btn--primary" data-act="submit-form" data-form="form-stock-move">' + (isIn ? "Confirmar entrada" : "Confirmar saída") + '</button>',
+      "modal--sm"
+    );
+  }
+  function deletePartModal(part) {
+    var linked = ordersWithPart(part.id);
+    var body =
+      '<div class="stock-summary">' +
+        '<div class="stock-line"><span>Peça</span><strong>' + esc(part.name) + '</strong></div>' +
+        '<div class="stock-line"><span>SKU</span><strong>' + esc(part.sku) + '</strong></div>' +
+        '<div class="stock-line"><span>Estoque atual</span><strong>' + n2(part.qty) + ' un.</strong></div>' +
+        '<div class="stock-line"><span>Reservado</span><strong>' + reservedByPart(part.id, null) + ' un.</strong></div>' +
+      '</div>' +
+      (linked.length
+        ? '<div class="alert alert--err">Esta peça está vinculada a ' + linked.length + ' O.S. (' + esc(linked.map(function (o) { return o.number; }).join(", ")) + '). Remova-a dos orçamentos/atendimentos antes de excluir.</div>'
+        : '<div class="alert alert--err">Esta ação é permanente e não pode ser desfeita.</div>');
+    return modalShell("Excluir peça", body,
+      '<button class="btn" data-act="close-modal">' + (linked.length ? "Fechar" : "Cancelar") + '</button>' +
+      (linked.length ? "" : '<button class="btn btn--danger-solid" data-act="confirm-delete-part" data-id="' + part.id + '">Excluir peça</button>'),
+      "modal--sm");
+  }
   function newStaffModal() {
     var body = '<form id="form-new-staff">' +
       field("Nome", '<input name="name" required placeholder="Nome completo">') +
@@ -753,8 +835,8 @@
     openModal(modalShell("Novo funcionário", body,
       '<button class="btn" data-act="close-modal">Cancelar</button><button class="btn btn--primary" data-act="submit-form" data-form="form-new-staff">Criar</button>'));
   }
-  function modalShell(title, body, foot) {
-    return '<div class="modal-back" data-act="close-modal-bg"><div class="modal">' +
+  function modalShell(title, body, foot, variant) {
+    return '<div class="modal-back" data-act="close-modal-bg"><div class="modal' + (variant ? " " + variant : "") + '">' +
       '<div class="modal-head"><h2 class="card-title">' + esc(title) + '</h2>' +
       '<button class="icon-btn" data-act="close-modal" aria-label="Fechar">&#215;</button></div>' +
       '<div class="modal-body">' + body + '</div>' +
@@ -864,18 +946,26 @@
     if (act === "stock-move") {
       var part = findPart(el.getAttribute("data-id"));
       if (!part) return;
-      var dir = el.getAttribute("data-dir");
-      var qtyStr = window.prompt((dir === "in" ? "Entrada" : "Saída") + " de estoque para " + part.name + " (atual: " + n2(part.qty) + "):", "1");
-      if (qtyStr == null) return;
-      var q = parseInt(qtyStr, 10);
-      if (isNaN(q) || q <= 0) { toast("Quantidade inválida.", "err"); return; }
-      if (dir === "in") part.qty = n2(part.qty) + q;
-      else {
-        var avail = availableForPart(part.id);
-        if (q > avail) { toast("Falta no estoque (disponível: " + avail + ").", "err"); return; }
-        part.qty = Math.max(0, n2(part.qty) - q);
+      openModal(stockMoveModal(part.id, el.getAttribute("data-dir")));
+      return;
+    }
+
+    if (act === "delete-part") {
+      var partDel = findPart(el.getAttribute("data-id"));
+      if (!partDel) return;
+      openModal(deletePartModal(partDel));
+      return;
+    }
+
+    if (act === "confirm-delete-part") {
+      var partDpc = findPart(el.getAttribute("data-id"));
+      if (!partDpc) { closeModal(); return; }
+      if (ordersWithPart(partDpc.id).length) {
+        openModal(deletePartModal(partDpc));
+        return;
       }
-      persist(); toast("Estoque de " + part.name + " atualizado."); render();
+      db.parts = db.parts.filter(function (p) { return p.id !== partDpc.id; });
+      persist(); closeModal(); toast("Peça " + partDpc.name + " excluída.");
       return;
     }
 
@@ -1001,6 +1091,30 @@
       db.parts.push({ id: uid("p"), sku: p.sku.toUpperCase(), name: p.name, brand: p.brand || "", unit: "UN",
         price: n2(p.price), qty: parseInt(p.qty, 10) || 0, minQty: parseInt(p.minQty, 10) || 0, location: p.location || "" });
       persist(); state.modal = null; toast("Peça cadastrada."); render();
+      return;
+    }
+
+    if (form.id === "form-stock-move") {
+      var part = findPart(form.getAttribute("data-id"));
+      var dir = form.getAttribute("data-dir");
+      if (!part) { closeModal(); return; }
+      var fo = formToObject(form);
+      var q = parseInt(fo.qty, 10);
+      if (isNaN(q) || q <= 0) {
+        openModal(stockMoveModal(part.id, dir, "Informe uma quantidade maior que zero.", fo.qty));
+        return;
+      }
+      if (dir === "out") {
+        var avail = availableForPart(part.id);
+        if (q > avail) {
+          openModal(stockMoveModal(part.id, dir, "Quantidade indisponível. Disponível para saída: " + avail + " un.", fo.qty));
+          return;
+        }
+        part.qty = Math.max(0, n2(part.qty) - q);
+      } else {
+        part.qty = n2(part.qty) + q;
+      }
+      persist(); closeModal(); toast("Estoque de " + part.name + " atualizado.");
       return;
     }
 
