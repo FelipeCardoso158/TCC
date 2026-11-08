@@ -9,6 +9,7 @@
 
   var DB_KEY = "sgom_db_v1";
   var SESSION_KEY = "sgom_session_v1";
+  var THEME_KEY = "sgom_theme_v1";
 
   /* ============================================================
      1. Persistencia e sessao
@@ -57,6 +58,10 @@
       changed = fixField(o, "complaint") || changed;
       (o.items || []).forEach(function (i) { changed = fixField(i, "name") || changed; });
     });
+    (db.appointments || []).forEach(function (a) {
+      changed = fixField(a, "service") || changed;
+      changed = fixField(a, "complaint") || changed;
+    });
     if (changed) persist();
   }
 
@@ -72,9 +77,58 @@
     else localStorage.removeItem(SESSION_KEY);
   }
 
+  function getTheme() {
+    try { return localStorage.getItem(THEME_KEY) === "dark" ? "dark" : "light"; }
+    catch (e) { return "light"; }
+  }
+  function applyTheme(theme) {
+    var t = theme === "dark" ? "dark" : "light";
+    document.documentElement.setAttribute("data-theme", t);
+    try { localStorage.setItem(THEME_KEY, t); } catch (e) { /* sem localStorage */ }
+    var meta = document.getElementById("theme-color-meta");
+    if (meta) meta.setAttribute("content", t === "dark" ? "#0f1215" : "#f8f9fa");
+    updateThemeButtons();
+  }
+  function toggleTheme() {
+    applyTheme(document.documentElement.getAttribute("data-theme") === "dark" ? "light" : "dark");
+  }
+  function updateThemeButtons() {
+    var isDark = document.documentElement.getAttribute("data-theme") === "dark";
+    Array.prototype.forEach.call(document.querySelectorAll("[data-theme-toggle]"), function (btn) {
+      btn.innerHTML = isDark ? icon("sun", 18) : icon("moon", 18);
+      btn.setAttribute("aria-label", isDark ? "Ativar tema claro" : "Ativar tema escuro");
+      btn.setAttribute("title", isDark ? "Tema claro" : "Tema escuro");
+    });
+  }
+
+  function migrateStructure() {
+    var changed = false;
+    if (!Array.isArray(db.appointments)) { db.appointments = clone(window.SGOM_SEED.appointments || []); changed = true; }
+    if (!db.seq) { db.seq = clone(window.SGOM_SEED.seq || {}); changed = true; }
+    if (!db.seq.appointment) { db.seq.appointment = 1011; changed = true; }
+    var seedCosts = {};
+    (window.SGOM_SEED.parts || []).forEach(function (p) { seedCosts[p.id] = n2(p.cost); });
+    (db.parts || []).forEach(function (p) {
+      if (p.cost == null || isNaN(Number(p.cost))) {
+        p.cost = seedCosts[p.id] != null ? seedCosts[p.id] : 0;
+        changed = true;
+      }
+    });
+    if (changed) persist();
+  }
+
   var db = loadDB();
+  migrateStructure();
   migrateAccents();
-  var state = { view: null, modal: null, openOrderId: null, orcTab: "ativos", loginTab: "staff", clientMode: "entrar" };
+  var state = {
+    view: null, modal: null, openOrderId: null, orcTab: "ativos", loginTab: "staff", clientMode: "entrar", publicView: "landing",
+    search: "", searchOpen: false,
+    clientQuery: "",
+    chatOpen: false,
+    chatMessages: [],
+    fin: { period: "mes", from: "", to: "" },
+    agenda: { mode: "mes", cursor: todayISO() }
+  };
 
   /* ============================================================
      2. Utilitarios
@@ -85,12 +139,29 @@
       return ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c];
     });
   }
+  function normText(s) {
+    return String(s == null ? "" : s).toLowerCase()
+      .normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+  }
+  function normPlate(s) {
+    return normText(s).replace(/[^a-z0-9]/g, "").toUpperCase();
+  }
   var brl = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" });
   function money(v) { return brl.format(Number(v) || 0); }
   function n2(v) { return Number(v) || 0; }
-  function todayISO() { return new Date().toISOString().slice(0, 10); }
+  function todayISO() { return isoFromDate(new Date()); }
   function nowLocal() { var d = new Date(); return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16); }
-  function fmtDate(iso) { if (!iso) return "-"; var d = new Date(iso); return isNaN(d) ? esc(iso) : d.toLocaleDateString("pt-BR"); }
+  function fmtDate(iso) {
+    if (!iso) return "-";
+    var s = String(iso), d;
+    if (/^\d{4}-\d{2}-\d{2}$/.test(s)) {
+      var p = s.split("-");
+      d = new Date(Number(p[0]), Number(p[1]) - 1, Number(p[2]));
+    } else {
+      d = new Date(s);
+    }
+    return isNaN(d) ? esc(iso) : d.toLocaleDateString("pt-BR");
+  }
   function fmtDateTime(iso) {
     if (!iso) return "-"; var d = new Date(iso);
     return isNaN(d) ? esc(iso) : d.toLocaleDateString("pt-BR") + " " + d.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
@@ -138,6 +209,11 @@
   function findMoto(id) { return db.motorcycles.filter(function (m) { return m.id === id; })[0] || null; }
   function findPart(id) { return db.parts.filter(function (p) { return p.id === id; })[0] || null; }
   function findUser(id) { return db.users.filter(function (u) { return u.id === id; })[0] || null; }
+  function partUnitCost(item) {
+    if (item && item.unitCost != null) return n2(item.unitCost);
+    var part = item ? findPart(item.refId) : null;
+    return part ? n2(part.cost) : 0;
+  }
 
   function orderTotal(os) {
     var sum = os.items.reduce(function (a, i) { return a + n2(i.qty) * n2(i.unitPrice); }, 0);
@@ -237,22 +313,31 @@
     state.view = view;
     state.modal = null;
     state.openOrderId = null;
+    state.searchOpen = false;
     render();
     window.scrollTo(0, 0);
   }
 
   function render() {
     var user = currentUser();
-    if (!user) { renderLogin(); renderModals(null); return; }
+    if (!user) {
+      if (state.publicView === "login") renderLogin();
+      else renderLanding();
+      renderModals(null);
+      updateThemeButtons();
+      chatOpenAfterRender();
+      return;
+    }
     if (user.role === "CLIENTE") renderClientApp(user);
     else renderStaffApp(user);
     renderModals(user);
+    updateThemeButtons();
+    chatOpenAfterRender();
   }
 
   function renderModals(user) {
     var root = document.getElementById("modal-root");
-    if (!user) { root.innerHTML = ""; return; }
-    if (state.openOrderId) {
+    if (user && state.openOrderId) {
       var os = findOrder(state.openOrderId);
       if (os) { root.innerHTML = orderModalHTML(os, user); return; }
       state.openOrderId = null;
@@ -261,6 +346,52 @@
   }
   function openModal(html) { state.modal = html; state.openOrderId = null; render(); }
   function closeModal() { state.modal = null; state.openOrderId = null; render(); }
+
+  function clearAuthHash() {
+    if (String(location.hash || "").indexOf("#/login") === 0) {
+      history.replaceState(null, "", location.pathname + location.search);
+    }
+  }
+  function goLogin(tab, signup) {
+    state.publicView = "login";
+    state.loginTab = tab === "client" ? "client" : "staff";
+    state.clientMode = signup ? "cadastro" : "entrar";
+    state.modal = null;
+    state.openOrderId = null;
+    state.searchOpen = false;
+    var target = tab === "client" ? "#/login/cliente" : "#/login";
+    if (location.hash !== target) location.hash = target;
+    else render();
+    window.scrollTo(0, 0);
+  }
+  function goLanding() {
+    state.publicView = "landing";
+    state.modal = null;
+    state.openOrderId = null;
+    state.searchOpen = false;
+    state.clientMode = "entrar";
+    state.clientQuery = "";
+    clearAuthHash();
+    render();
+    window.scrollTo(0, 0);
+  }
+  function accessModalHTML() {
+    return modalShell("Entrar no SGOM",
+      '<p class="muted" style="margin-top:0">Escolha como deseja acessar o sistema.</p>' +
+      '<div class="access-options">' +
+        '<button type="button" class="access-option" data-act="access-client">' +
+          '<span class="landing-icon">' + icon("bike", 22) + '</span>' +
+          '<strong>Área do Cliente</strong>' +
+          '<span>Entre para acompanhar suas O.S. e aprovar orçamentos</span>' +
+        '</button>' +
+        '<button type="button" class="access-option" data-act="access-staff">' +
+          '<span class="landing-icon">' + icon("wrench", 22) + '</span>' +
+          '<strong>Área do Funcionário</strong>' +
+          '<span>Acesso exclusivo da equipe da oficina</span>' +
+        '</button>' +
+      '</div>',
+      '<button class="btn" data-act="close-modal">Fechar</button>');
+  }
 
   /* ============================================================
      5. Tela de login
@@ -273,13 +404,10 @@
         '<div class="login-head">' +
           '<span class="brand-mark">' + brandMark(48) + '</span>' +
           '<h1>SGOM</h1>' +
-          '<p>Sistema de Gerenciamento para Oficina de Motos</p>' +
+          '<p>' + (isStaff ? 'Acesso exclusivo da equipe da oficina' : 'Acompanhe suas ordens de serviço') + '</p>' +
         '</div>' +
         '<div class="login-body">' +
-          '<div class="tabs">' +
-            '<button type="button" data-act="login-tab" data-tab="staff" class="' + (isStaff ? "active" : "") + '">Funcionário</button>' +
-            '<button type="button" data-act="login-tab" data-tab="client" class="' + (!isStaff ? "active" : "") + '">Cliente</button>' +
-          '</div>' +
+          '<button type="button" class="login-back" data-act="landing-back">&#8592; Voltar ao início</button>' +
           (isStaff ? loginStaffHTML() : loginClientHTML()) +
         '</div>' +
       '</div></div>';
@@ -287,8 +415,8 @@
 
   function loginStaffHTML() {
     return '<form id="form-login-staff" autocomplete="off">' +
-      field("E-mail", '<input name="email" type="email" required placeholder="funcionario@sgom">') +
-      field("Senha", '<input name="password" type="password" required placeholder="sua senha">') +
+      field("Usuário", '<input name="email" type="text" required placeholder="funcionario@sgom" autocomplete="username">') +
+      field("Senha", '<input name="password" type="password" required placeholder="sua senha" autocomplete="current-password">') +
       '<button class="btn btn--primary" style="width:100%" type="submit">Entrar</button>' +
       '<div class="hint">Acesso de demonstração: <code>funcionario@sgom</code> / <code>sgom123</code></div>' +
       '</form>';
@@ -344,11 +472,331 @@
       file: '<path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7z"/><path d="M14 2v5h5"/>',
       settings: '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06A1.65 1.65 0 0 0 15 19.4a1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.6 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.6a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>',
       plus: '<path d="M5 12h14M12 5v14"/>',
-      logout: '<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="m16 17 5-5-5-5"/><path d="M21 12H9"/>'
+      logout: '<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="m16 17 5-5-5-5"/><path d="M21 12H9"/>',
+      chat: '<path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/>',
+      chart: '<path d="M3 3v18h18"/><path d="M7 15v2"/><path d="M12 11v6"/><path d="M17 7v10"/>',
+      pin: '<path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0z"/><circle cx="12" cy="10" r="3"/>',
+      clock: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
+      sun: '<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.42 1.42M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.42-1.42M17.66 6.34l1.41-1.41"/>',
+      moon: '<path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>',
+      search: '<circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/>',
+      chevron: '<path d="m6 9 6 6 6-6"/>'
     };
     var s = size || 18;
     return '<svg width="' + s + '" height="' + s + '" viewBox="0 0 24 24" fill="none" stroke="currentColor" ' +
       'stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + (paths[name] || "") + "</svg>";
+  }
+
+  function whatsappIcon(size) {
+    var s = size || 24;
+    return '<svg width="' + s + '" height="' + s + '" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">' +
+      '<path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 0 1-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 0 1-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 0 1 2.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0 0 12.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 0 0 5.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 0 0-3.48-8.413Z"/>' +
+    '</svg>';
+  }
+
+  /* ============================================================
+     5.1 Landing page publica
+     ============================================================ */
+  function renderLanding() {
+    document.getElementById("app").innerHTML =
+      '<div class="landing">' +
+        '<a class="landing-skip" href="#inicio">Ir para o conteudo</a>' +
+        landingHeader() +
+        '<main>' +
+          landingHero() +
+          landingAbout() +
+          landingServices() +
+          landingContact() +
+        '</main>' +
+        landingFooter() +
+        landingChatWidget() +
+      '</div>';
+  }
+
+  function landingHeader() {
+    return '<header class="landing-header">' +
+      '<div class="landing-header-inner">' +
+        '<a class="landing-brand" href="#inicio" data-act="landing-close" aria-label="SGOM - inicio">' +
+          '<span class="brand-mark">' + brandMark(40) + '</span>' +
+          '<span class="landing-brand-text"><strong>SGOM</strong><span>Oficina de Motos</span></span>' +
+        '</a>' +
+        '<nav class="landing-nav" id="landing-nav" aria-label="Navegacao principal">' +
+          '<a href="#inicio" data-act="landing-close">Início</a>' +
+          '<a href="#sobre" data-act="landing-close">Sobre nós</a>' +
+          '<a href="#servicos" data-act="landing-close">Serviços</a>' +
+          '<a href="#contatos" data-act="landing-close">Contatos</a>' +
+          '<button class="btn btn--primary landing-nav-cta" type="button" data-act="access-open">Entrar</button>' +
+        '</nav>' +
+        '<button class="theme-toggle" type="button" data-theme-toggle data-act="theme-toggle"></button>' +
+        '<button class="landing-menu-btn" type="button" data-act="landing-menu" aria-expanded="false" aria-controls="landing-nav" aria-label="Abrir menu">' +
+          '<span></span><span></span><span></span>' +
+        '</button>' +
+      '</div>' +
+    '</header>';
+  }
+
+  function landingHero() {
+    return '<section class="landing-hero" id="inicio">' +
+      '<div class="landing-hero-glow" aria-hidden="true"></div>' +
+      '<div class="landing-container landing-hero-grid">' +
+        '<div class="landing-hero-copy">' +
+          '<span class="landing-eyebrow">Gestão para oficinas de motos</span>' +
+          '<h1>Sua oficina organizada <span>do orçamento à entrega.</span></h1>' +
+          '<p>O SGOM centraliza estoque, atendimentos e ordens de serviço em uma interface simples. Menos planilhas, mais controle sobre cada moto que passa pela sua oficina.</p>' +
+          '<div class="landing-hero-actions">' +
+            '<button class="btn btn--primary btn--lg" type="button" data-act="access-open">Entrar</button>' +
+            '<a class="btn btn--lg landing-btn-ghost" href="#servicos">Conhecer os serviços</a>' +
+          '</div>' +
+          '<ul class="landing-hero-points">' +
+            '<li>' + icon("box", 16) + ' Estoque com reserva e baixa</li>' +
+            '<li>' + icon("file", 16) + ' Orçamentos com aprovação</li>' +
+            '<li>' + icon("gauge", 16) + ' Acompanhamento em tempo real</li>' +
+          '</ul>' +
+        '</div>' +
+        '<div class="landing-hero-visual" aria-hidden="true">' +
+          '<div class="landing-feature-card">' +
+            '<div class="landing-feature-head">' +
+              '<span class="landing-feature-logo">' + icon("gauge", 24) + '</span>' +
+              '<div><strong>SGOM</strong><span>Gestão completa da oficina</span></div>' +
+            '</div>' +
+            '<div class="landing-feature-grid">' +
+              '<div class="landing-feature-item"><span class="landing-icon">' + icon("box", 18) + '</span><strong>Estoque</strong><span>Peças, reservas e alertas</span></div>' +
+              '<div class="landing-feature-item"><span class="landing-icon">' + icon("wrench", 18) + '</span><strong>Atendimentos</strong><span>O.S. organizadas por etapa</span></div>' +
+              '<div class="landing-feature-item"><span class="landing-icon">' + icon("file", 18) + '</span><strong>Orçamentos</strong><span>Aprovação do cliente</span></div>' +
+              '<div class="landing-feature-item"><span class="landing-icon">' + icon("chart", 18) + '</span><strong>Financeiro</strong><span>Receita e custos</span></div>' +
+            '</div>' +
+            '<div class="landing-feature-footer"><span class="dot"></span><span>Informações atualizadas em tempo real</span></div>' +
+          '</div>' +
+        '</div>' +
+      '</div>' +
+    '</section>';
+  }
+
+  function landingAbout() {
+    return '<section class="landing-section" id="sobre">' +
+      '<div class="landing-container">' +
+        '<div class="landing-section-head">' +
+          '<span class="landing-eyebrow landing-eyebrow--dark">Sobre nós</span>' +
+          '<h2>Tecnologia para o dia a dia da oficina</h2>' +
+          '<p>O SGOM foi pensado para oficinas de motocicletas que precisam de controle sem complicação. Reunimos as rotinas essenciais em um só sistema, do cadastro do cliente à entrega da moto.</p>' +
+        '</div>' +
+        '<div class="landing-about-grid">' +
+          '<article class="landing-about-card">' +
+            '<span class="landing-icon">' + icon("gauge", 22) + '</span>' +
+            '<h3>Visão completa</h3>' +
+            '<p>Acompanhe o andamento de cada atendimento e identifique rapidamente o que precisa de atenção.</p>' +
+          '</article>' +
+          '<article class="landing-about-card">' +
+            '<span class="landing-icon">' + icon("box", 22) + '</span>' +
+            '<h3>Estoque sob controle</h3>' +
+            '<p>Saiba o que está disponível, o que está reservado e quando é hora de repor peças.</p>' +
+          '</article>' +
+          '<article class="landing-about-card">' +
+            '<span class="landing-icon">' + icon("users", 22) + '</span>' +
+            '<h3>Relação transparente</h3>' +
+            '<p>O cliente acompanha o orçamento e aprova ou reprova com o motivo, sem ruído na comunicação.</p>' +
+          '</article>' +
+        '</div>' +
+      '</div>' +
+    '</section>';
+  }
+
+  function landingServices() {
+    return '<section class="landing-section landing-section--alt" id="servicos">' +
+      '<div class="landing-container">' +
+        '<div class="landing-section-head">' +
+          '<span class="landing-eyebrow landing-eyebrow--dark">Serviços</span>' +
+          '<h2>O que já está funcionando</h2>' +
+          '<p>Módulos prontos para a operação da oficina, com regras de negócio pensadas para o dia a dia.</p>' +
+        '</div>' +
+        '<div class="landing-cards">' +
+          '<article class="landing-card">' +
+            '<span class="landing-icon">' + icon("box", 24) + '</span>' +
+            '<h3>Controle de Estoque</h3>' +
+            '<p>Entradas e saídas de peças, reserva automática ao aprovar orçamentos e alerta de estoque mínimo.</p>' +
+            '<ul class="landing-list">' +
+              '<li>Entrada e saída com validação</li>' +
+              '<li>Reserva ao aprovar orçamento</li>' +
+              '<li>Alerta de estoque crítico</li>' +
+            '</ul>' +
+          '</article>' +
+          '<article class="landing-card">' +
+            '<span class="landing-icon">' + icon("wrench", 24) + '</span>' +
+            '<h3>Atendimentos</h3>' +
+            '<p>Abertura de O.S., acompanhamento por etapas e visão em kanban de tudo o que está em execução.</p>' +
+            '<ul class="landing-list">' +
+              '<li>Abertura com KM de entrada</li>' +
+              '<li>Kanban por status</li>' +
+              '<li>Histórico por cliente e moto</li>' +
+            '</ul>' +
+          '</article>' +
+          '<article class="landing-card">' +
+            '<span class="landing-icon">' + icon("file", 24) + '</span>' +
+            '<h3>Ordens de Serviço</h3>' +
+            '<p>Orçamentos com serviços e peças, desconto, validade e aprovação do cliente.</p>' +
+            '<ul class="landing-list">' +
+              '<li>Itens de serviço e peça</li>' +
+              '<li>Desconto e validade</li>' +
+              '<li>Aprovação ou reprovação com motivo</li>' +
+            '</ul>' +
+          '</article>' +
+        '</div>' +
+        '<div class="landing-future">' +
+          '<div class="landing-future-head">' +
+            '<span class="badge landing-badge-soon">Em breve</span>' +
+            '<h3>Próximos passos</h3>' +
+            '<p>Evoluções planejadas para deixar a rotina ainda mais integrada.</p>' +
+          '</div>' +
+          '<div class="landing-future-grid">' +
+            '<div class="landing-future-item">' +
+              '<span class="landing-icon">' + icon("chat", 20) + '</span>' +
+              '<div><strong>Integração com WhatsApp</strong><span>Envio de orçamentos e avisos direto para o cliente.</span></div>' +
+            '</div>' +
+            '<div class="landing-future-item">' +
+              '<span class="landing-icon">' + icon("chart", 20) + '</span>' +
+              '<div><strong>Relatórios financeiros</strong><span>Receita, custos e desempenho da oficina em relatórios claros.</span></div>' +
+            '</div>' +
+          '</div>' +
+        '</div>' +
+      '</div>' +
+    '</section>';
+  }
+
+  function landingContact() {
+    return '<section class="landing-section" id="contatos">' +
+      '<div class="landing-container landing-contact-grid">' +
+        '<div class="landing-contact-copy">' +
+          '<span class="landing-eyebrow landing-eyebrow--dark">Contatos</span>' +
+          '<h2>Fale com a gente</h2>' +
+          '<p>Tem dúvidas sobre o sistema ou quer acompanhar sua moto? Use um dos canais abaixo.</p>' +
+          '<div class="landing-contact-list">' +
+            '<div class="landing-contact-item">' +
+              '<span class="landing-icon">' + icon("chat", 18) + '</span>' +
+              '<div><strong>E-mail</strong><a href="mailto:contato@sgom.com.br">contato@sgom.com.br</a></div>' +
+            '</div>' +
+            '<div class="landing-contact-item">' +
+              '<span class="landing-icon">' + whatsappIcon(18) + '</span>' +
+              '<div><strong>Telefone / WhatsApp</strong><a href="https://wa.me/5511900000000" target="_blank" rel="noopener">(11) 90000-0000</a></div>' +
+            '</div>' +
+            '<div class="landing-contact-item">' +
+              '<span class="landing-icon">' + icon("pin", 18) + '</span>' +
+              '<div><strong>Endereço</strong><span>Sombrio - SC</span></div>' +
+            '</div>' +
+            '<div class="landing-contact-item">' +
+              '<span class="landing-icon">' + icon("clock", 18) + '</span>' +
+              '<div><strong>Horário</strong><span>Seg a Sex, 8h às 18h · Sáb, 8h às 12h</span></div>' +
+            '</div>' +
+          '</div>' +
+          '<div class="landing-hero-actions">' +
+            '<a class="btn btn--primary" href="https://wa.me/5511900000000" target="_blank" rel="noopener">Falar no WhatsApp</a>' +
+            '<button class="btn" type="button" data-act="access-open">Entrar</button>' +
+          '</div>' +
+        '</div>' +
+        '<aside class="landing-contact-card">' +
+          '<span class="badge landing-badge-soon">Acesso</span>' +
+          '<h3>Já é cliente?</h3>' +
+          '<p>Acompanhe suas ordens de serviço, aprove orçamentos e consulte o histórico da sua moto.</p>' +
+          '<button class="btn btn--primary" type="button" data-act="client-login">Entrar na minha conta</button>' +
+          '<button class="btn landing-btn-ghost" type="button" data-act="landing-signup">Criar conta de cliente</button>' +
+        '</aside>' +
+      '</div>' +
+    '</section>';
+  }
+
+  function landingFooter() {
+    return '<footer class="landing-footer">' +
+      '<div class="landing-container">' +
+        '<div class="landing-footer-card">' +
+          '<div>' +
+            '<span class="badge landing-badge-soon">Atendimento</span>' +
+            '<h3>Acompanhe sua moto</h3>' +
+            '<p>Entre na Área do Cliente para consultar o andamento das suas O.S. e o histórico da sua moto.</p>' +
+            '<div class="landing-footer-city">' + icon("pin", 16) + ' Sombrio - SC</div>' +
+          '</div>' +
+          '<button class="btn btn--primary" type="button" data-act="client-login">Acompanhar Minha Moto</button>' +
+        '</div>' +
+        '<div class="landing-footer-inner">' +
+          '<div class="landing-footer-brand">' +
+            '<span class="brand-mark">' + brandMark(36) + '</span>' +
+            '<div><strong>SGOM</strong><span>Sistema de Gerenciamento para Oficina de Motos</span></div>' +
+          '</div>' +
+          '<nav aria-label="Links do rodapé">' +
+            '<a href="#inicio">Início</a>' +
+            '<a href="#sobre">Sobre nós</a>' +
+            '<a href="#servicos">Serviços</a>' +
+            '<a href="#contatos">Contatos</a>' +
+            '<a href="#" data-act="access-open">Entrar</a>' +
+          '</nav>' +
+          '<small>© 2026 SGOM · Sombrio - SC. Todos os direitos reservados.</small>' +
+        '</div>' +
+      '</div>' +
+    '</footer>';
+  }
+
+  /* ============================================================
+     5.2 Chat simulado (Landing)
+     ============================================================ */
+  function chatTime() {
+    return new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+  }
+  function chatPush(from, text) {
+    state.chatMessages.push({ from: from, text: text, time: chatTime() });
+  }
+  function chatBotReply(text) {
+    var t = normText(text);
+    if (/horario|hora|aberto|abre|funciona|fecha/.test(t)) {
+      return "Nosso horário de atendimento é de segunda a sexta, das 8h às 18h, e sábado das 8h às 12h. Estamos em Sombrio - SC.";
+    }
+    if (/agendar|agendamento|revisao|marcar|marcacao/.test(t)) {
+      return "Para agendar uma revisão, informe sua placa e o período desejado. Um atendente confirma o horário em seguida.";
+    }
+    if (/consultar|consulta|ordem|os|placa|andamento|moto/.test(t)) {
+      return "Para consultar sua O.S. com segurança, entre na Área do Cliente pelo botão Entrar. Lá você vê somente as ordens da sua moto.";
+    }
+    if (/preco|valor|orcamento|custa/.test(t)) {
+      return "Os valores dependem do serviço e das peças necessárias. Peça um orçamento e acompanhe a aprovação pela Área do Cliente.";
+    }
+    if (/obrigad|valeu|tchau/.test(t)) {
+      return "Obrigado pelo contato! A SGOM está à disposição para cuidar da sua moto.";
+    }
+    return "Recebi sua mensagem. Posso ajudar com agendamento, consulta de O.S. e horário de atendimento. Escolha um dos atalhos ou detalhe sua dúvida.";
+  }
+  function landingChatWidget() {
+    if (!state.chatMessages.length) {
+      chatPush("bot", "Olá! Sou o atendimento virtual da SGOM. Como posso ajudar?");
+    }
+    var body = state.chatMessages.map(function (m) {
+      return '<div class="wa-msg ' + (m.from === "user" ? "user" : "") + '">' +
+        esc(m.text).replace(/\n/g, "<br>") +
+        '<span class="wa-time">' + esc(m.time || "") + '</span>' +
+      '</div>';
+    }).join("");
+    var windowHtml =
+      '<div class="wa-window" role="dialog" aria-label="SGOM Atendimento">' +
+        '<div class="wa-head">' +
+          '<span class="wa-avatar">' + icon("chat", 20) + '</span>' +
+          '<div class="wa-head-info"><strong>SGOM Atendimento</strong><span>Online agora</span></div>' +
+          '<button class="wa-close" type="button" data-act="chat-close" aria-label="Fechar atendimento">&#215;</button>' +
+        '</div>' +
+        '<div class="wa-body" id="wa-body">' + body + '</div>' +
+        '<div class="wa-quick">' +
+          '<button type="button" data-act="chat-quick" data-key="agendar">📅 Agendar Revisão</button>' +
+          '<button type="button" data-act="chat-quick" data-key="consultar">🔍 Consultar O.S.</button>' +
+          '<button type="button" data-act="chat-quick" data-key="horario">📍 Horário</button>' +
+        '</div>' +
+        '<form class="wa-form" id="form-chat">' +
+          '<input name="message" type="text" placeholder="Escreva sua mensagem..." autocomplete="off" aria-label="Mensagem">' +
+          '<button class="wa-send" type="submit" aria-label="Enviar mensagem">' + icon("chat", 18) + '</button>' +
+        '</form>' +
+      '</div>';
+    return '<div class="wa-widget">' +
+      (state.chatOpen ? windowHtml : "") +
+      '<button class="wa-float" type="button" data-act="chat-toggle" aria-label="Abrir atendimento SGOM">' + whatsappIcon(30) + '</button>' +
+    '</div>';
+  }
+  function chatOpenAfterRender() {
+    var bodyEl = document.getElementById("wa-body");
+    if (bodyEl) bodyEl.scrollTop = bodyEl.scrollHeight;
   }
 
   /* ============================================================
@@ -356,37 +804,187 @@
      ============================================================ */
   var STAFF_NAV = [
     { id: "dashboard", label: "Dashboard", icon: "gauge" },
+    { id: "agenda", label: "Agenda", icon: "clock" },
     { id: "orcamentos", label: "Orçamentos", icon: "file" },
-    { id: "os", label: "Atendimentos (O.S.)", icon: "wrench" },
+    { id: "os", label: "Atendimentos (O.S.)", shortLabel: "O.S.", icon: "wrench" },
     { id: "estoque", label: "Estoque", icon: "box" },
     { id: "clientes", label: "Clientes", icon: "users" },
-    { id: "servicos", label: "Serviços", icon: "list" },
-    { id: "funcionarios", label: "Funcionários", icon: "badge" }
+    { id: "servicos", label: "Serviços", icon: "list", more: true },
+    { id: "financeiro", label: "Financeiro", icon: "chart", more: true },
+    { id: "funcionarios", label: "Funcionários", icon: "badge", more: true }
   ];
   function defaultView(user) { return user.role === "CLIENTE" ? "minhasos" : "dashboard"; }
 
+  function navLinkHTML(it, activeView) {
+    return '<a href="#' + it.id + '" data-act="nav" data-view="' + it.id + '" title="' + esc(it.label) + '" class="' + (it.id === activeView ? "active" : "") + '">' + esc(it.shortLabel || it.label) + "</a>";
+  }
+
   function topbar(user, navItems, activeView) {
-    var nav = navItems.map(function (it) {
-      return '<a href="#' + it.id + '" data-act="nav" data-view="' + it.id + '" class="' + (it.id === activeView ? "active" : "") + '">' + esc(it.label) + "</a>";
-    }).join("");
+    var primary = navItems.filter(function (it) { return !it.more; });
+    var secondary = navItems.filter(function (it) { return it.more; });
+    var nav = primary.map(function (it) { return navLinkHTML(it, activeView); }).join("");
+    if (secondary.length) {
+      var moreActive = secondary.some(function (it) { return it.id === activeView; });
+      nav += '<details class="nav-more">' +
+        '<summary class="nav-more-toggle' + (moreActive ? " active" : "") + '">Mais ' + icon("chevron", 14) + '</summary>' +
+        '<div class="nav-more-menu">' + secondary.map(function (it) { return navLinkHTML(it, activeView); }).join("") + '</div>' +
+      '</details>';
+    }
+    var searchHtml = user.role === "CLIENTE" ? "" :
+      '<div class="topbar-search" id="staff-search">' +
+        '<span class="search-icon">' + icon("search", 15) + '</span>' +
+        '<input id="staff-search-input" type="search" placeholder="Buscar cliente, moto, placa ou O.S." autocomplete="off" aria-label="Buscar cliente, moto, placa ou O.S." value="' + esc(state.search) + '">' +
+        '<div class="search-results' + (state.searchOpen ? " open" : "") + '" id="search-results">' +
+          (state.searchOpen ? staffSearchResultsHTML(state.search) : "") +
+        '</div>' +
+      '</div>';
     return '<header class="topbar">' +
       '<a class="brand" href="#inicio" data-act="nav" data-view="' + defaultView(user) + '">' +
         '<span class="brand-mark">' + brandMark(34) + '</span>' +
-        '<span><strong>SGOM</strong><span>Oficina de Motos</span></span>' +
+        '<span class="brand-name"><strong>SGOM</strong></span>' +
       '</a>' +
-      '<nav aria-label="Navegação principal">' + nav + '</nav>' +
+      '<nav id="staff-nav" aria-label="Navegação principal">' + nav + '</nav>' +
       '<div class="spacer"></div>' +
+      searchHtml +
+      '<button class="theme-toggle" type="button" data-theme-toggle data-act="theme-toggle"></button>' +
       '<div class="who"><strong>' + esc(user.name) + '</strong><span>' + (user.role === "CLIENTE" ? "Cliente" : "Funcionário") + '</span></div>' +
-      '<button class="btn btn--sm btn--ghost" data-act="logout" title="Sair" style="color:#fff;border-color:#3a4149">Sair</button>' +
+      '<button class="btn btn--sm btn--logout" data-act="logout" title="Sair" aria-label="Sair">' + icon("logout", 15) + '<span class="logout-label">Sair</span></button>' +
+      '<button class="staff-menu-btn" type="button" data-act="staff-menu" aria-expanded="false" aria-controls="staff-nav" aria-label="Abrir menu"><span></span><span></span><span></span></button>' +
       '</header>';
   }
 
   function renderStaffApp(user) {
     if (!state.view) state.view = "dashboard";
-    var views = { dashboard: viewDashboard, orcamentos: viewOrcamentos, os: viewOS, estoque: viewEstoque, clientes: viewClientes, servicos: viewServicos, funcionarios: viewFuncionarios };
+    var views = {
+      dashboard: viewDashboard, agenda: viewAgenda, orcamentos: viewOrcamentos, os: viewOS,
+      estoque: viewEstoque, clientes: viewClientes, servicos: viewServicos,
+      financeiro: viewFinanceiro, funcionarios: viewFuncionarios
+    };
     var build = views[state.view] || viewDashboard;
     document.getElementById("app").innerHTML =
       '<div class="app">' + topbar(user, STAFF_NAV, state.view) + '<div class="content">' + build(user) + '</div></div>';
+  }
+
+  /* ---------------- Busca global do funcionario ---------------- */
+  function searchMatches(qRaw) {
+    var q = normText(qRaw).trim();
+    var plateQ = normPlate(qRaw);
+    var empty = { customers: [], motos: [], orders: [] };
+    if (q.length < 2 && plateQ.length < 2) return empty;
+
+    var customers = db.customers.filter(function (c) {
+      return normText(c.name).indexOf(q) !== -1 ||
+        normText(c.email).indexOf(q) !== -1 ||
+        normText(c.phone).indexOf(q) !== -1 ||
+        normText(c.doc).indexOf(q) !== -1;
+    });
+    var motos = db.motorcycles.filter(function (m) {
+      return normPlate(m.plate).indexOf(plateQ) !== -1 ||
+        normText(m.brand + " " + m.model).indexOf(q) !== -1;
+    });
+    var orders = db.orders.filter(function (o) {
+      var c = findCustomer(o.customerId), m = findMoto(o.motorcycleId);
+      if (normText(o.number).indexOf(q) !== -1) return true;
+      if (m && (normPlate(m.plate).indexOf(plateQ) !== -1 || normText(m.brand + " " + m.model).indexOf(q) !== -1)) return true;
+      return !!(c && normText(c.name).indexOf(q) !== -1);
+    });
+    orders.sort(function (a, b) { return String(b.number).localeCompare(String(a.number)); });
+    return { customers: customers, motos: motos, orders: orders };
+  }
+  function staffSearchResultsHTML(qRaw) {
+    if (normText(qRaw).trim().length < 2 && normPlate(qRaw).length < 2) return "";
+    var r = searchMatches(qRaw);
+    var total = r.customers.length + r.motos.length + r.orders.length;
+    if (!total) return '<div class="search-empty">Nenhum resultado para "' + esc(String(qRaw || "").trim()) + '".</div>';
+    var html = "";
+    if (r.customers.length) {
+      html += '<div class="search-group"><h4>Clientes</h4>' + r.customers.slice(0, 6).map(function (c) {
+        var motos = db.motorcycles.filter(function (m) { return m.customerId === c.id; });
+        return '<button type="button" class="search-item" data-act="search-client" data-id="' + c.id + '">' +
+          '<span class="landing-icon" style="width:32px;height:32px;border-radius:9px;margin:0">' + icon("users", 16) + '</span>' +
+          '<span class="search-item-main"><strong>' + esc(c.name) + '</strong><span>' + esc(c.phone || "-") + ' · ' + motos.length + ' moto(s)</span></span>' +
+        '</button>';
+      }).join("") + '</div>';
+    }
+    if (r.motos.length) {
+      html += '<div class="search-group"><h4>Motos</h4>' + r.motos.slice(0, 6).map(function (m) {
+        var c = findCustomer(m.customerId);
+        return '<button type="button" class="search-item" data-act="search-moto" data-id="' + m.id + '">' +
+          '<span class="landing-icon" style="width:32px;height:32px;border-radius:9px;margin:0">' + icon("bike", 16) + '</span>' +
+          '<span class="search-item-main"><strong>' + esc(m.brand + " " + m.model) + ' · ' + esc(m.plate) + '</strong><span>' + esc(c ? c.name : "-") + '</span></span>' +
+        '</button>';
+      }).join("") + '</div>';
+    }
+    if (r.orders.length) {
+      html += '<div class="search-group"><h4>Ordens de serviço</h4>' + r.orders.slice(0, 8).map(function (o) {
+        var c = findCustomer(o.customerId), m = findMoto(o.motorcycleId);
+        var st = STATUS[displayStatus(o)] || { label: displayStatus(o) };
+        return '<button type="button" class="search-item" data-act="open-order" data-id="' + o.id + '">' +
+          '<span class="landing-icon" style="width:32px;height:32px;border-radius:9px;margin:0">' + icon("wrench", 16) + '</span>' +
+          '<span class="search-item-main"><strong>' + esc(o.number) + ' · ' + esc(st.label) + '</strong><span>' + esc(c ? c.name : "-") + ' · ' + esc(m ? m.plate : "-") + '</span></span>' +
+        '</button>';
+      }).join("") + '</div>';
+    }
+    return html;
+  }
+  function closeSearchResults() {
+    state.searchOpen = false;
+    var box = document.getElementById("search-results");
+    if (box) box.classList.remove("open");
+  }
+  function ordersForMoto(motoId) {
+    return db.orders.filter(function (o) { return o.motorcycleId === motoId; })
+      .sort(function (a, b) { return String(b.createdAt).localeCompare(String(a.createdAt)); });
+  }
+  function miniOrderRow(o) {
+    return '<div class="mini-order">' +
+      '<div class="mini-order-info"><strong>' + esc(o.number) + '</strong> ' + badge(displayStatus(o)) +
+        '<span>' + fmtDate(o.createdAt) + ' · ' + money(orderTotal(o)) + '</span></div>' +
+      '<button class="btn btn--sm" data-act="open-order" data-id="' + o.id + '">Abrir O.S.</button>' +
+    '</div>';
+  }
+  function searchClientModal(customerId) {
+    var c = findCustomer(customerId);
+    if (!c) return;
+    var motos = db.motorcycles.filter(function (m) { return m.customerId === c.id; });
+    var body =
+      '<div class="client-file-grid">' +
+        '<div class="client-file-box">' + infoBox("Telefone", c.phone || "-") + '</div>' +
+        '<div class="client-file-box">' + infoBox("E-mail", c.email || "-") + '</div>' +
+        '<div class="client-file-box">' + infoBox("CPF/CNPJ", c.doc || "-") + '</div>' +
+        '<div class="client-file-box">' + infoBox("Motos", String(motos.length)) + '</div>' +
+      '</div>' +
+      '<h3 style="margin:0 0 4px">Motos cadastradas</h3>' +
+      (motos.length ? motos.map(function (m) {
+        var orders = ordersForMoto(m.id);
+        return '<div class="client-moto">' +
+          '<div class="client-moto-head">' +
+            '<div><span class="plate">' + esc(m.plate) + '</span> <strong>' + esc(m.brand + " " + m.model) + '</strong>' +
+              '<div class="cell-sub">' + esc(m.year || "-") + ' · ' + n2(m.km).toLocaleString("pt-BR") + ' km</div></div>' +
+            '<span class="badge">' + orders.length + ' O.S.</span>' +
+          '</div>' +
+          '<div class="client-moto-body">' +
+            (orders.length ? orders.map(miniOrderRow).join("") : '<div class="empty" style="padding:14px">Nenhuma O.S. para esta moto.</div>') +
+          '</div>' +
+        '</div>';
+      }).join("") : '<div class="empty">Nenhuma moto cadastrada.</div>');
+    openModal(modalShell("Cliente · " + c.name, body, '<button class="btn" data-act="close-modal">Fechar</button>'));
+  }
+  function searchMotoModal(motoId) {
+    var m = findMoto(motoId);
+    if (!m) return;
+    var c = findCustomer(m.customerId);
+    var orders = ordersForMoto(m.id);
+    var body =
+      '<div class="client-file-grid">' +
+        '<div class="client-file-box">' + infoBox("Placa", m.plate) + '</div>' +
+        '<div class="client-file-box">' + infoBox("Modelo", m.brand + " " + m.model) + '</div>' +
+        '<div class="client-file-box">' + infoBox("Proprietário", c ? c.name : "-") + '</div>' +
+        '<div class="client-file-box">' + infoBox("KM atual", n2(m.km).toLocaleString("pt-BR")) + '</div>' +
+      '</div>' +
+      '<h3 style="margin:0 0 4px">O.S. vinculadas</h3>' +
+      (orders.length ? '<div class="client-moto"><div class="client-moto-body">' + orders.map(miniOrderRow).join("") + '</div></div>' : '<div class="empty">Nenhuma O.S. para esta moto.</div>');
+    openModal(modalShell("Moto · " + m.plate, body, '<button class="btn" data-act="close-modal">Fechar</button>'));
   }
 
   /* ---------------- Dashboard ---------------- */
@@ -538,6 +1136,335 @@
     });
     html += '</div>';
     return html;
+  }
+
+  /* ---------------- Financeiro ---------------- */
+  function parseISODate(iso) {
+    var p = String(iso || "").slice(0, 10).split("-");
+    if (p.length !== 3) return null;
+    var d = new Date(Number(p[0]), Number(p[1]) - 1, Number(p[2]));
+    return isNaN(d.getTime()) ? null : d;
+  }
+  function isoFromDate(d) {
+    var m = String(d.getMonth() + 1);
+    var day = String(d.getDate());
+    return d.getFullYear() + "-" + (m.length < 2 ? "0" + m : m) + "-" + (day.length < 2 ? "0" + day : day);
+  }
+  function startOfWeekDate(d) {
+    var x = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+    var offset = (x.getDay() + 6) % 7;
+    x.setDate(x.getDate() - offset);
+    return x;
+  }
+  function orderRefISO(o) { return String(o.deliveredAt || "").slice(0, 10); }
+  function finRange() {
+    var today = todayISO();
+    if (state.fin.period === "semana") {
+      var mon = startOfWeekDate(new Date());
+      var sun = new Date(mon);
+      sun.setDate(sun.getDate() + 6);
+      return { from: isoFromDate(mon), to: isoFromDate(sun), label: "Esta semana" };
+    }
+    if (state.fin.period === "mes") {
+      var now = new Date();
+      var first = new Date(now.getFullYear(), now.getMonth(), 1);
+      var last = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+      return { from: isoFromDate(first), to: isoFromDate(last), label: "Este mês" };
+    }
+    if (state.fin.period === "custom") {
+      var from = state.fin.from || today;
+      var to = state.fin.to || from;
+      if (from > to) { var tmp = from; from = to; to = tmp; }
+      return { from: from, to: to, label: fmtDate(from) + " a " + fmtDate(to) };
+    }
+    return { from: today, to: today, label: "Hoje" };
+  }
+  function finOrdersInRange(from, to) {
+    return db.orders.filter(function (o) {
+      if (displayStatus(o) !== "ENTREGUE") return false;
+      var ref = orderRefISO(o);
+      return !!ref && ref >= from && ref <= to;
+    });
+  }
+  function finSummary(orders) {
+    var total = 0, labor = 0, partsSale = 0, partsCost = 0;
+    orders.forEach(function (o) {
+      o.items.forEach(function (i) {
+        var v = n2(i.qty) * n2(i.unitPrice);
+        if (i.type === "LABOR") labor += v;
+        else {
+          partsSale += v;
+          partsCost += n2(i.qty) * partUnitCost(i);
+        }
+      });
+      total += orderTotal(o);
+    });
+    return { total: total, labor: labor, partsSale: partsSale, partsCost: partsCost, profit: total - partsCost, count: orders.length };
+  }
+  function financeTable(orders) {
+    if (!orders.length) return '<div class="empty">Nenhuma O.S. entregue no período selecionado.</div>';
+    var sorted = orders.slice().sort(function (a, b) { return orderRefISO(b).localeCompare(orderRefISO(a)); });
+    return '<table><thead><tr><th>Nº da O.S.</th><th>Data</th><th>Cliente</th><th class="num">Mão de Obra (R$)</th><th class="num">Peças (R$)</th><th class="num">Total (R$)</th></tr></thead><tbody>' +
+      sorted.map(function (o) {
+        var c = findCustomer(o.customerId);
+        var labor = 0, parts = 0;
+        o.items.forEach(function (i) {
+          var v = n2(i.qty) * n2(i.unitPrice);
+          if (i.type === "LABOR") labor += v;
+          else parts += v;
+        });
+        return '<tr>' +
+          '<td><button class="fin-order-link" type="button" data-act="open-order" data-id="' + o.id + '"><strong>' + esc(o.number) + '</strong></button><div style="margin-top:4px">' + badge(displayStatus(o)) + '</div></td>' +
+          '<td>' + fmtDate(orderRefISO(o)) + '</td>' +
+          '<td>' + esc(c ? c.name : "-") + '</td>' +
+          '<td class="num">' + money(labor) + '</td>' +
+          '<td class="num">' + money(parts) + '</td>' +
+          '<td class="num"><strong>' + money(orderTotal(o)) + '</strong></td>' +
+        '</tr>';
+      }).join("") + '</tbody></table>';
+  }
+  function viewFinanceiro() {
+    var range = finRange();
+    var orders = finOrdersInRange(range.from, range.to);
+    var sum = finSummary(orders);
+    var todaySum = finSummary(finOrdersInRange(todayISO(), todayISO()));
+    var periods = [["hoje", "Hoje"], ["semana", "Esta Semana"], ["mes", "Este Mês"], ["custom", "Personalizado"]];
+    var periodsHtml = '<div class="fin-periods">' + periods.map(function (p) {
+      return '<button type="button" data-act="fin-period" data-period="' + p[0] + '" class="' + (state.fin.period === p[0] ? "active" : "") + '">' + p[1] + '</button>';
+    }).join("") + '</div>';
+    var customHtml = state.fin.period === "custom" ?
+      '<div class="fin-custom">' +
+        '<div class="field"><label>Data inicial</label><input id="fin-from" type="date" value="' + esc(state.fin.from || range.from) + '"></div>' +
+        '<div class="field"><label>Data final</label><input id="fin-to" type="date" value="' + esc(state.fin.to || range.to) + '"></div>' +
+        '<button class="btn btn--sm btn--primary" type="button" data-act="fin-apply">Aplicar</button>' +
+      '</div>' : "";
+
+    return viewHead("Financeiro", "Receita, custos de peças e lucro das ordens entregues") +
+      '<div class="fin-filters">' + periodsHtml + customHtml + '</div>' +
+      '<p class="fin-hint">Período: <strong>' + esc(range.label) + '</strong> · Somente O.S. entregues. Lucro = faturamento − custo das peças. Peças sem custo cadastrado entram como R$ 0,00.</p>' +
+      '<div class="grid-kpi fin-kpis">' +
+        kpi("Receita de Hoje", money(todaySum.total), "O.S. entregues hoje") +
+        kpi("Faturamento Total", money(sum.total), range.label) +
+        kpi("Custos de Peças", money(sum.partsCost), "peças utilizadas no período") +
+        kpi("Lucro Líquido", money(sum.profit), "faturamento − custos", sum.profit < 0) +
+      '</div>' +
+      '<section class="card" style="margin-top:16px">' +
+        '<div class="card-head"><h2 class="card-title">Lançamentos do período</h2><span class="badge">' + orders.length + ' O.S.</span></div>' +
+        '<div class="card-body" style="padding:0">' + financeTable(orders) + '</div>' +
+      '</section>';
+  }
+
+  /* ---------------- Agenda ---------------- */
+  var APPT_STATUS = {
+    PRE_AGENDADO: { label: "Pré-agendamento", cls: "appt-pre" },
+    CONFIRMADO: { label: "Confirmado", cls: "appt-conf" },
+    EM_ATENDIMENTO: { label: "Em Atendimento", cls: "appt-exec" },
+    CONCLUIDO: { label: "Concluído", cls: "appt-done" }
+  };
+  function apptStatusMeta(status) {
+    return APPT_STATUS[status] || { label: status, cls: "appt-done" };
+  }
+  function apptBadge(status) {
+    var m = apptStatusMeta(status);
+    return '<span class="appt-status-badge ' + m.cls + '">' + esc(m.label) + '</span>';
+  }
+  function findAppointment(id) {
+    return db.appointments.filter(function (a) { return a.id === id; })[0] || null;
+  }
+  function apptsByDate() {
+    var map = {};
+    db.appointments.forEach(function (a) {
+      if (!map[a.date]) map[a.date] = [];
+      map[a.date].push(a);
+    });
+    Object.keys(map).forEach(function (k) {
+      map[k].sort(function (a, b) { return String(a.time).localeCompare(String(b.time)); });
+    });
+    return map;
+  }
+  function agendaCursor() {
+    return parseISODate(state.agenda.cursor) || new Date();
+  }
+  function agendaTitle() {
+    var d = agendaCursor();
+    if (state.agenda.mode === "semana") {
+      var start = startOfWeekDate(d), end = new Date(start);
+      end.setDate(end.getDate() + 6);
+      return start.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" }) + " a " +
+        end.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" });
+    }
+    if (state.agenda.mode === "dia") {
+      return d.toLocaleDateString("pt-BR", { weekday: "long", day: "2-digit", month: "long", year: "numeric" });
+    }
+    return d.toLocaleDateString("pt-BR", { month: "long", year: "numeric" });
+  }
+  function apptChip(a) {
+    var c = findCustomer(a.customerId);
+    var m = apptStatusMeta(a.status);
+    var name = c ? c.name.split(" ")[0] : "Cliente";
+    return '<button type="button" class="cal-appt ' + m.cls + '" data-act="appt-open" data-id="' + a.id + '" title="' +
+      esc((a.service || "Agendamento") + " · " + (c ? c.name : "")) + '"><strong>' + esc(a.time) + '</strong> ' + esc(name) + '</button>';
+  }
+  function agendaMonthHTML(cursor) {
+    var year = cursor.getFullYear(), month = cursor.getMonth();
+    var first = new Date(year, month, 1);
+    var start = new Date(first);
+    start.setDate(start.getDate() - ((first.getDay() + 6) % 7));
+    var map = apptsByDate();
+    var weekdays = ["Seg", "Ter", "Qua", "Qui", "Sex", "Sáb", "Dom"];
+    var days = "";
+    for (var i = 0; i < 42; i++) {
+      var d = new Date(start);
+      d.setDate(start.getDate() + i);
+      var iso = isoFromDate(d);
+      var list = map[iso] || [];
+      days += '<div class="cal-day' + (d.getMonth() !== month ? " out" : "") + (iso === todayISO() ? " today" : "") + '">' +
+        '<span class="cal-day-num">' + d.getDate() + '</span>' +
+        list.map(apptChip).join("") +
+      '</div>';
+    }
+    return '<div class="cal-scroll"><div class="cal-month">' +
+      weekdays.map(function (w) { return '<div class="cal-weekday">' + w + '</div>'; }).join("") +
+      days + '</div></div>';
+  }
+  function agendaWeekHTML(cursor) {
+    var start = startOfWeekDate(cursor);
+    var map = apptsByDate();
+    var cols = "";
+    for (var i = 0; i < 7; i++) {
+      var d = new Date(start);
+      d.setDate(start.getDate() + i);
+      var iso = isoFromDate(d);
+      var list = map[iso] || [];
+      cols += '<div class="cal-week-col">' +
+        '<div class="cal-week-head">' + esc(d.toLocaleDateString("pt-BR", { weekday: "short" })) + '<strong>' + d.getDate() + '</strong></div>' +
+        (list.length ? list.map(apptChip).join("") : '<div class="muted" style="font-size:12px">—</div>') +
+      '</div>';
+    }
+    return '<div class="cal-scroll"><div class="cal-week">' + cols + '</div></div>';
+  }
+  function agendaDayHTML(cursor) {
+    var iso = isoFromDate(cursor);
+    var list = apptsByDate()[iso] || [];
+    if (!list.length) return '<div class="card"><div class="empty">Nenhum agendamento nesta data.</div></div>';
+    return '<div class="cal-day-list">' + list.map(function (a) {
+      var c = findCustomer(a.customerId), m = findMoto(a.motorcycleId);
+      return '<div class="cal-day-row">' +
+        '<span class="cal-day-time">' + esc(a.time) + '</span>' +
+        '<div class="cal-day-main"><strong>' + esc(c ? c.name : "-") + ' · ' + esc(m ? m.plate : "-") + '</strong><span>' + esc(a.service || "Agendamento") + '</span></div>' +
+        apptBadge(a.status) +
+        '<button class="btn btn--sm" data-act="appt-open" data-id="' + a.id + '">Abrir</button>' +
+      '</div>';
+    }).join("") + '</div>';
+  }
+  function viewAgenda() {
+    var cursor = agendaCursor();
+    var modes = [["mes", "Mês"], ["semana", "Semana"], ["dia", "Dia"]];
+    var tabs = '<div class="tabs" style="max-width:280px;margin-bottom:0">' + modes.map(function (m) {
+      return '<button type="button" data-act="agenda-mode" data-mode="' + m[0] + '" class="' + (state.agenda.mode === m[0] ? "active" : "") + '">' + m[1] + '</button>';
+    }).join("") + '</div>';
+    var toolbar = '<div class="agenda-toolbar">' + tabs +
+      '<div class="agenda-nav">' +
+        '<button class="btn btn--sm" type="button" data-act="agenda-prev" aria-label="Anterior">&#8249;</button>' +
+        '<button class="btn btn--sm" type="button" data-act="agenda-today">Hoje</button>' +
+        '<button class="btn btn--sm" type="button" data-act="agenda-next" aria-label="Próximo">&#8250;</button>' +
+        '<span class="agenda-title">' + esc(agendaTitle()) + '</span>' +
+      '</div>' +
+    '</div>';
+    var content = state.agenda.mode === "semana" ? agendaWeekHTML(cursor) :
+      state.agenda.mode === "dia" ? agendaDayHTML(cursor) : agendaMonthHTML(cursor);
+    return viewHead("Agenda", "Agendamentos da oficina por status",
+      '<button class="btn btn--primary" data-act="appt-new">' + icon("plus", 16) + ' Novo agendamento</button>') +
+      toolbar + content;
+  }
+  function appointmentModalHTML(a) {
+    var c = findCustomer(a.customerId), m = findMoto(a.motorcycleId);
+    var meta = apptStatusMeta(a.status);
+    var linked = a.orderId ? findOrder(a.orderId) : null;
+    var body =
+      '<div class="row3">' +
+        infoBox("Cliente", c ? c.name : "-") +
+        infoBox("Moto", m ? (m.brand + " " + m.model) : "-") +
+        infoBox("Placa", m ? m.plate : "-") +
+      '</div>' +
+      '<div class="row3" style="margin-top:12px">' +
+        infoBox("Data", fmtDate(a.date)) +
+        infoBox("Hora", a.time) +
+        infoBox("Status", meta.label) +
+      '</div>' +
+      '<div class="row3" style="margin-top:12px">' +
+        infoBox("Serviço", a.service || "-") +
+        infoBox("Queixa / observação", a.complaint || "-") +
+        infoBox("Criado em", fmtDateTime(a.createdAt)) +
+      '</div>' +
+      (linked ? '<div class="alert alert--info" style="margin-top:14px">Convertido na O.S. <strong>' + esc(linked.number) + '</strong>.</div>' : "");
+    var foot = '<button class="btn" data-act="close-modal">Fechar</button>';
+    if (linked) {
+      foot += '<button class="btn btn--primary" data-act="open-order" data-id="' + linked.id + '">Abrir O.S.</button>';
+    } else {
+      if (a.status === "PRE_AGENDADO") foot += '<button class="btn" data-act="appt-status" data-id="' + a.id + '" data-to="CONFIRMADO">Confirmar</button>';
+      if (a.status === "PRE_AGENDADO" || a.status === "CONFIRMADO") foot += '<button class="btn" data-act="appt-status" data-id="' + a.id + '" data-to="EM_ATENDIMENTO">Iniciar atendimento</button>';
+      if (a.status !== "CONCLUIDO") foot += '<button class="btn" data-act="appt-status" data-id="' + a.id + '" data-to="CONCLUIDO">Concluir</button>';
+      foot += '<button class="btn btn--primary" data-act="appt-convert" data-id="' + a.id + '">Converter em O.S.</button>';
+    }
+    return modalShell("Agendamento · " + a.number, body, foot);
+  }
+  function newAppointmentModal() {
+    var opts = db.customers.map(function (c) {
+      var motos = db.motorcycles.filter(function (m) { return m.customerId === c.id; });
+      if (!motos.length) return "";
+      return '<optgroup label="' + esc(c.name) + '">' + motos.map(function (m) {
+        return '<option value="' + m.id + '">' + esc(m.brand + " " + m.model + " · " + m.plate) + '</option>';
+      }).join("") + '</optgroup>';
+    }).join("");
+    var svc = db.services.map(function (s) {
+      return '<option value="' + s.id + '">' + esc(s.code + " · " + s.name) + '</option>';
+    }).join("");
+    var statuses = Object.keys(APPT_STATUS).map(function (k) {
+      return '<option value="' + k + '"' + (k === "PRE_AGENDADO" ? " selected" : "") + '>' + esc(APPT_STATUS[k].label) + '</option>';
+    }).join("");
+    var body = '<form id="form-new-appointment">' +
+      field("Moto", '<select name="motorcycleId" required>' + (opts || '<option value="">Nenhuma moto cadastrada</option>') + '</select>') +
+      '<div class="row2">' +
+        field("Data", '<input name="date" type="date" required value="' + esc(state.agenda.cursor || todayISO()) + '">') +
+        field("Hora", '<input name="time" type="time" required value="09:00">') +
+      '</div>' +
+      '<div class="row2">' +
+        field("Serviço", '<select name="serviceId"><option value="">Sem serviço definido</option>' + svc + '</select>') +
+        field("Status", '<select name="status">' + statuses + '</select>') +
+      '</div>' +
+      field("Queixa / observação", '<input name="complaint" placeholder="ex.: revisão dos 10.000 km">') +
+      '</form>';
+    openModal(modalShell("Novo agendamento", body,
+      '<button class="btn" data-act="close-modal">Cancelar</button>' +
+      '<button class="btn btn--primary" data-act="submit-form" data-form="form-new-appointment">Salvar</button>'));
+  }
+  function convertAppointmentToOrder(apptId) {
+    var a = findAppointment(apptId);
+    if (!a) return;
+    if (a.orderId && findOrder(a.orderId)) {
+      state.openOrderId = a.orderId; state.modal = null; render(); return;
+    }
+    var moto = findMoto(a.motorcycleId);
+    if (!moto) { toast("Moto do agendamento não encontrada.", "err"); return; }
+    var svc = a.serviceId ? db.services.filter(function (s) { return s.id === a.serviceId; })[0] : null;
+    var order = {
+      id: uid("o"), number: "OS-" + (db.seq.order++), customerId: a.customerId, motorcycleId: a.motorcycleId,
+      status: "APROVADA", kmEntry: n2(moto.km), complaint: a.complaint || a.service || "Agendamento",
+      discount: 0, reserved: false, createdAt: nowLocal(), startedAt: null, finishedAt: null, deliveredAt: null,
+      validUntil: null,
+      items: svc ? [{ type: "LABOR", refId: svc.id, name: svc.name, qty: 1, unitPrice: n2(svc.price) }] : []
+    };
+    db.orders.push(order);
+    a.orderId = order.id;
+    a.status = "CONCLUIDO";
+    persist();
+    toast("Agendamento " + a.number + " convertido em " + order.number + ".");
+    state.view = "os";
+    state.modal = null;
+    state.openOrderId = order.id;
+    render();
+    window.scrollTo(0, 0);
   }
 
   /* ---------------- Estoque ---------------- */
@@ -698,10 +1625,22 @@
   /* ============================================================
      8. Portal do cliente
      ============================================================ */
-  function renderClientApp(user) {
-    if (!state.view) state.view = "minhasos";
-    var orders = db.orders.filter(function (o) { return o.customerId === user.customerId; });
-    var cards = orders.length ? orders.map(function (o) {
+  function clientFilteredOrders(user) {
+    var q = normText(state.clientQuery).trim();
+    var plateQ = normPlate(state.clientQuery);
+    return db.orders.filter(function (o) {
+      if (o.customerId !== user.customerId) return false;
+      if (!q && !plateQ) return true;
+      var m = findMoto(o.motorcycleId);
+      return normText(o.number).indexOf(q) !== -1 ||
+        !!(m && (normPlate(m.plate).indexOf(plateQ) !== -1 || normText(m.brand + " " + m.model).indexOf(q) !== -1));
+    });
+  }
+  function clientOrdersHTML(orders) {
+    if (!orders.length) {
+      return '<div class="empty">' + (state.clientQuery.trim() ? 'Nenhuma O.S. encontrada para esta busca.' : 'Você ainda não tem ordens de serviço.') + '</div>';
+    }
+    return orders.map(function (o) {
       var m = findMoto(o.motorcycleId);
       return '<section class="card" style="margin-bottom:12px"><div class="card-body" style="display:flex;justify-content:space-between;gap:12px;align-items:center;flex-wrap:wrap">' +
         '<div><strong>' + esc(o.number) + '</strong> ' + badge(displayStatus(o)) +
@@ -709,11 +1648,20 @@
           '<div class="cell-sub">Aberta em ' + fmtDate(o.createdAt) + ' · Total ' + money(orderTotal(o)) + '</div></div>' +
         '<button class="btn" data-act="open-order" data-id="' + o.id + '">Ver detalhes</button>' +
       '</div></section>';
-    }).join("") : '<div class="empty">Você ainda não tem ordens de serviço.</div>';
+    }).join("");
+  }
+  function renderClientApp(user) {
+    if (!state.view) state.view = "minhasos";
+    var cards = clientOrdersHTML(clientFilteredOrders(user));
 
     document.getElementById("app").innerHTML =
       '<div class="app">' + topbar(user, [{ id: "minhasos", label: "Minhas O.S." }], "minhasos") +
-      '<div class="content">' + viewHead("Minhas O.S.", "Acompanhe suas ordens e aprove orçamentos") + cards + '</div></div>';
+      '<div class="content">' + viewHead("Minhas O.S.", "Acompanhe suas ordens e aprove orçamentos") +
+        '<section class="card client-filter"><div class="card-body">' +
+          field("Buscar por placa ou número da O.S.", '<input id="client-order-search" type="search" placeholder="Ex.: ABC1D23 ou OS-1002" value="' + esc(state.clientQuery) + '">') +
+        '</div></section>' +
+        '<div id="client-orders-list">' + cards + '</div>' +
+      '</div></div>';
   }
 
   /* ============================================================
@@ -770,8 +1718,11 @@
     var body = '<form id="form-new-part">' +
       '<div class="row2">' + field("SKU", '<input name="sku" required>') + field("Nome", '<input name="name" required>') + '</div>' +
       '<div class="row2">' + field("Marca", '<input name="brand">') + field("Localização", '<input name="location" placeholder="prateleira">') + '</div>' +
-      '<div class="row3">' +
-        field("Preço (R$)", '<input name="price" type="number" min="0" step="0.01" required>') +
+      '<div class="row2">' +
+        field("Preço de venda (R$)", '<input name="price" type="number" min="0" step="0.01" required>') +
+        field("Custo (R$)", '<input name="cost" type="number" min="0" step="0.01" value="0">') +
+      '</div>' +
+      '<div class="row2">' +
         field("Estoque", '<input name="qty" type="number" min="0" value="0">') +
         field("Mínimo", '<input name="minQty" type="number" min="0" value="0">') +
       '</div>' +
@@ -867,17 +1818,124 @@
      10. Eventos
      ============================================================ */
   document.addEventListener("click", function (e) {
+    if (!e.target.closest("#staff-search")) closeSearchResults();
+    if (!e.target.closest(".nav-more")) {
+      Array.prototype.forEach.call(document.querySelectorAll(".nav-more[open]"), function (d) { d.removeAttribute("open"); });
+    }
+    var staffNav = document.getElementById("staff-nav");
+    if (staffNav && staffNav.classList.contains("open") &&
+      !e.target.closest("#staff-nav") && !e.target.closest(".staff-menu-btn")) {
+      staffNav.classList.remove("open");
+      var staffBtn = document.querySelector(".staff-menu-btn");
+      if (staffBtn) staffBtn.setAttribute("aria-expanded", "false");
+    }
     var el = e.target.closest("[data-act]");
     if (!el) return;
     var act = el.getAttribute("data-act");
 
-    if (act === "login-tab") { state.loginTab = el.getAttribute("data-tab"); state.clientMode = "entrar"; renderLogin(); return; }
+    if (act === "access-open") { e.preventDefault(); openModal(accessModalHTML()); return; }
+    if (act === "access-client") { e.preventDefault(); goLogin("client"); return; }
+    if (act === "access-staff") { e.preventDefault(); goLogin("staff"); return; }
+    if (act === "client-login") { e.preventDefault(); goLogin("client"); return; }
+    if (act === "landing-login") { e.preventDefault(); goLogin("staff"); return; }
+    if (act === "landing-signup") { e.preventDefault(); goLogin("client", true); return; }
+    if (act === "landing-back") { e.preventDefault(); goLanding(); return; }
+    if (act === "theme-toggle") { toggleTheme(); return; }
+    if (act === "search-client") { state.searchOpen = false; searchClientModal(el.getAttribute("data-id")); return; }
+    if (act === "search-moto") { state.searchOpen = false; searchMotoModal(el.getAttribute("data-id")); return; }
+    if (act === "chat-toggle") { state.chatOpen = !state.chatOpen; render(); return; }
+    if (act === "chat-close") { state.chatOpen = false; render(); return; }
+    if (act === "chat-quick") {
+      var key = el.getAttribute("data-key");
+      if (key === "agendar") {
+        chatPush("user", "Quero agendar uma revisão.");
+        chatPush("bot", chatBotReply("Quero agendar uma revisão."));
+        render();
+      } else if (key === "horario") {
+        chatPush("user", "Qual é o horário de atendimento?");
+        chatPush("bot", chatBotReply("Qual é o horário de atendimento?"));
+        render();
+      } else {
+        state.chatOpen = false;
+        toast("Entre na Área do Cliente para consultar suas O.S.");
+        goLogin("client");
+      }
+      return;
+    }
+    if (act === "fin-period") {
+      state.fin.period = el.getAttribute("data-period");
+      if (state.fin.period === "custom" && (!state.fin.from || !state.fin.to)) {
+        var nowFin = new Date();
+        state.fin.from = isoFromDate(new Date(nowFin.getFullYear(), nowFin.getMonth(), 1));
+        state.fin.to = todayISO();
+      }
+      render();
+      return;
+    }
+    if (act === "fin-apply") {
+      var fromEl = document.getElementById("fin-from");
+      var toEl = document.getElementById("fin-to");
+      state.fin.from = fromEl ? fromEl.value : state.fin.from;
+      state.fin.to = toEl ? toEl.value : state.fin.to;
+      state.fin.period = "custom";
+      render();
+      return;
+    }
+    if (act === "agenda-mode") { state.agenda.mode = el.getAttribute("data-mode"); render(); return; }
+    if (act === "agenda-prev" || act === "agenda-next") {
+      var delta = act === "agenda-prev" ? -1 : 1;
+      var cursor = agendaCursor();
+      if (state.agenda.mode === "mes") cursor.setMonth(cursor.getMonth() + delta);
+      else if (state.agenda.mode === "semana") cursor.setDate(cursor.getDate() + delta * 7);
+      else cursor.setDate(cursor.getDate() + delta);
+      state.agenda.cursor = isoFromDate(cursor);
+      render();
+      return;
+    }
+    if (act === "agenda-today") { state.agenda.cursor = todayISO(); render(); return; }
+    if (act === "appt-new") { newAppointmentModal(); return; }
+    if (act === "appt-open") {
+      var apptOpen = findAppointment(el.getAttribute("data-id"));
+      if (apptOpen) openModal(appointmentModalHTML(apptOpen));
+      return;
+    }
+    if (act === "appt-status") {
+      var apptSt = findAppointment(el.getAttribute("data-id"));
+      var toSt = el.getAttribute("data-to");
+      if (!apptSt || !APPT_STATUS[toSt]) return;
+      apptSt.status = toSt;
+      persist();
+      toast("Agendamento " + apptSt.number + " → " + APPT_STATUS[toSt].label);
+      openModal(appointmentModalHTML(apptSt));
+      return;
+    }
+    if (act === "appt-convert") { convertAppointmentToOrder(el.getAttribute("data-id")); return; }
+    if (act === "landing-menu") {
+      var lnav = document.getElementById("landing-nav");
+      var lopen = lnav ? lnav.classList.toggle("open") : false;
+      el.setAttribute("aria-expanded", lopen ? "true" : "false");
+      return;
+    }
+    if (act === "staff-menu") {
+      var snav = document.getElementById("staff-nav");
+      var sopen = snav ? snav.classList.toggle("open") : false;
+      el.setAttribute("aria-expanded", sopen ? "true" : "false");
+      return;
+    }
+    if (act === "landing-close") {
+      var lnavC = document.getElementById("landing-nav");
+      if (lnavC) lnavC.classList.remove("open");
+      var lbtnC = document.querySelector(".landing-menu-btn");
+      if (lbtnC) lbtnC.setAttribute("aria-expanded", "false");
+      return;
+    }
+
     if (act === "client-mode") { state.clientMode = el.getAttribute("data-mode") === "cadastro" ? "cadastro" : "entrar"; renderLogin(); return; }
     if (act === "nav") { e.preventDefault(); navigate(el.getAttribute("data-view")); return; }
-    if (act === "logout") { setSession(null); state.view = null; render(); return; }
+    if (act === "logout") { setSession(null); state.view = null; state.publicView = "landing"; state.clientQuery = ""; clearAuthHash(); render(); return; }
     if (act === "orc-tab") { state.orcTab = el.getAttribute("data-tab"); render(); return; }
 
-    if (act === "open-order") { state.openOrderId = el.getAttribute("data-id"); state.modal = null; render(); return; }
+    if (act === "open-order") { state.searchOpen = false; state.openOrderId = el.getAttribute("data-id"); state.modal = null; render(); return; }
     if (act === "close-modal" || act === "close-modal-bg") {
       if (act === "close-modal-bg" && e.target !== el) return;
       closeModal(); return;
@@ -971,9 +2029,36 @@
 
     if (act === "reset-data") {
       if (window.confirm("Restaurar os dados de exemplo? Suas alterações serão perdidas.")) {
-        resetDB(); setSession(null); state.view = null; toast("Dados restaurados."); render();
+        resetDB(); setSession(null); state.view = null; state.publicView = "landing"; toast("Dados restaurados."); render();
       }
       return;
+    }
+  });
+
+  document.addEventListener("input", function (e) {
+    if (e.target.id === "client-order-search") {
+      state.clientQuery = e.target.value;
+      var list = document.getElementById("client-orders-list");
+      var user = currentUser();
+      if (list && user && user.role === "CLIENTE") list.innerHTML = clientOrdersHTML(clientFilteredOrders(user));
+      return;
+    }
+    if (e.target.id !== "staff-search-input") return;
+    state.search = e.target.value;
+    state.searchOpen = true;
+    var box = document.getElementById("search-results");
+    if (box) {
+      box.innerHTML = staffSearchResultsHTML(state.search);
+      box.classList.add("open");
+    }
+  });
+  document.addEventListener("focusin", function (e) {
+    if (e.target.id !== "staff-search-input") return;
+    state.searchOpen = true;
+    var box = document.getElementById("search-results");
+    if (box) {
+      box.innerHTML = staffSearchResultsHTML(state.search);
+      box.classList.add("open");
     }
   });
 
@@ -986,6 +2071,7 @@
       var d = formToObject(form);
       var u = db.users.filter(function (x) { return x.email.toLowerCase() === (d.email || "").toLowerCase() && x.role === "FUNCIONARIO"; })[0];
       if (!u || u.password !== d.password) { toast("E-mail ou senha inválidos.", "err"); return; }
+      clearAuthHash();
       setSession({ userId: u.id }); state.view = null; toast("Bem-vindo, " + u.name + "!"); render();
       return;
     }
@@ -995,7 +2081,8 @@
       var email = (dc.email || "").toLowerCase();
       var u = db.users.filter(function (x) { return x.email.toLowerCase() === email && x.role === "CLIENTE"; })[0];
       if (!u || u.password !== dc.password) { toast("E-mail ou senha inválidos.", "err"); return; }
-      setSession({ userId: u.id }); state.view = null; state.clientMode = "entrar";
+      clearAuthHash();
+      setSession({ userId: u.id }); state.view = null; state.clientMode = "entrar"; state.clientQuery = "";
       toast("Bem-vindo, " + u.name + "!"); render();
       return;
     }
@@ -1012,8 +2099,45 @@
       db.customers.push(custNew);
       var nu = { id: uid("u"), name: custNew.name, email: ds.email, password: ds.password, role: "CLIENTE", customerId: custNew.id };
       db.users.push(nu);
-      persist(); setSession({ userId: nu.id }); state.view = null; state.clientMode = "entrar";
+      persist(); clearAuthHash(); setSession({ userId: nu.id }); state.view = null; state.clientMode = "entrar"; state.clientQuery = "";
       toast("Conta criada. Bem-vindo, " + nu.name + "!"); render();
+      return;
+    }
+
+    if (form.id === "form-chat") {
+      var fc = formToObject(form);
+      var text = String(fc.message || "").trim();
+      if (!text) return;
+      chatPush("user", text);
+      chatPush("bot", chatBotReply(text));
+      form.reset();
+      render();
+      return;
+    }
+
+    if (form.id === "form-new-appointment") {
+      var na = formToObject(form);
+      var motoA = findMoto(na.motorcycleId);
+      if (!motoA) { toast("Selecione uma moto.", "err"); return; }
+      if (!na.date || !na.time) { toast("Informe data e hora.", "err"); return; }
+      var conflict = db.appointments.filter(function (a) {
+        return a.date === na.date && a.time === na.time && a.status !== "CONCLUIDO";
+      })[0];
+      if (conflict) { toast("Já existe agendamento nesse horário.", "err"); return; }
+      var svcA = na.serviceId ? db.services.filter(function (s) { return s.id === na.serviceId; })[0] : null;
+      var appt = {
+        id: uid("a"), number: "AG-" + (db.seq.appointment++),
+        customerId: motoA.customerId, motorcycleId: motoA.id,
+        date: na.date, time: na.time, status: na.status || "PRE_AGENDADO",
+        serviceId: svcA ? svcA.id : null, service: svcA ? svcA.name : (na.complaint || "Agendamento"),
+        complaint: na.complaint || "", orderId: null, createdAt: nowLocal()
+      };
+      db.appointments.push(appt);
+      persist();
+      state.modal = null;
+      state.agenda.cursor = na.date;
+      toast("Agendamento " + appt.number + " criado.");
+      render();
       return;
     }
 
@@ -1023,7 +2147,7 @@
       var fo = formToObject(form);
       var parts = (fo.item || "").split(":");
       var type = parts[0], refId = parts[1], qty = Math.max(1, parseInt(fo.qty, 10) || 1);
-      var name, price;
+      var name, price, cost = 0;
       if (type === "LABOR") {
         var svc = db.services.filter(function (s) { return s.id === refId; })[0];
         if (!svc) return;
@@ -1033,9 +2157,9 @@
         if (!part) return;
         var avail = availableForPart(part.id);
         if (qty > avail) { toast("Falta no estoque: disponível " + avail + " un. de " + part.name + ".", "err"); return; }
-        name = part.name; price = n2(part.price);
+        name = part.name; price = n2(part.price); cost = n2(part.cost);
       }
-      os.items.push({ type: type, refId: refId, name: name, qty: qty, unitPrice: price });
+      os.items.push({ type: type, refId: refId, name: name, qty: qty, unitPrice: price, unitCost: cost });
       if (os.status === "ABERTA" || os.status === "AGUARDANDO_APROVACAO") os.status = "ORCAMENTO";
       persist(); toast("Item adicionado."); render();
       return;
@@ -1089,7 +2213,7 @@
     if (form.id === "form-new-part") {
       var p = formToObject(form);
       db.parts.push({ id: uid("p"), sku: p.sku.toUpperCase(), name: p.name, brand: p.brand || "", unit: "UN",
-        price: n2(p.price), qty: parseInt(p.qty, 10) || 0, minQty: parseInt(p.minQty, 10) || 0, location: p.location || "" });
+        price: n2(p.price), cost: n2(p.cost), qty: parseInt(p.qty, 10) || 0, minQty: parseInt(p.minQty, 10) || 0, location: p.location || "" });
       persist(); state.modal = null; toast("Peça cadastrada."); render();
       return;
     }
@@ -1134,12 +2258,54 @@
   });
 
   document.addEventListener("keydown", function (e) {
-    if (e.key === "Escape" && (state.modal || state.openOrderId)) closeModal();
+    if (e.key !== "Escape") return;
+    if (state.searchOpen) { closeSearchResults(); return; }
+    var openMore = document.querySelector(".nav-more[open]");
+    if (openMore) { openMore.removeAttribute("open"); return; }
+    var staffNavEl = document.getElementById("staff-nav");
+    if (staffNavEl && staffNavEl.classList.contains("open")) {
+      staffNavEl.classList.remove("open");
+      var staffMenuBtn = document.querySelector(".staff-menu-btn");
+      if (staffMenuBtn) staffMenuBtn.setAttribute("aria-expanded", "false");
+      return;
+    }
+    if (state.modal || state.openOrderId) closeModal();
   });
 
   /* ============================================================
-     11. Inicio
+     11. Rotas de login e inicio
      ============================================================ */
+  function applyAuthHash(renderAfter) {
+    var hash = String(location.hash || "");
+    if (currentUser()) {
+      if (hash === "#/login" || hash === "#/login/cliente") clearAuthHash();
+      return;
+    }
+    if (hash === "#/login/cliente") {
+      state.publicView = "login";
+      state.loginTab = "client";
+      state.clientMode = "entrar";
+      state.modal = null;
+      if (renderAfter) render();
+      return;
+    }
+    if (hash === "#/login") {
+      state.publicView = "login";
+      state.loginTab = "staff";
+      state.clientMode = "entrar";
+      state.modal = null;
+      if (renderAfter) render();
+      return;
+    }
+    if (state.publicView === "login") {
+      state.publicView = "landing";
+      if (renderAfter) render();
+    }
+  }
+  window.addEventListener("hashchange", function () { applyAuthHash(true); });
+
+  applyTheme(getTheme());
+  applyAuthHash(false);
   var startUser = currentUser();
   state.view = startUser ? defaultView(startUser) : null;
   render();

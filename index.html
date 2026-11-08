@@ -3,9 +3,23 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="description" content="SGOM - Sistema de Gerenciamento para Oficina de Motos">
+  <meta name="description" content="SGOM - Sistema de Gerenciamento para Oficina de Motos: estoque, atendimentos e ordens de serviço em um só lugar.">
+  <meta name="theme-color" content="#f8f9fa" id="theme-color-meta">
+  <meta property="og:title" content="SGOM - Gestão para Oficina de Motos">
+  <meta property="og:description" content="Controle de estoque, atendimentos e ordens de serviço em uma interface simples para a sua oficina.">
+  <meta property="og:type" content="website">
   <title>SGOM - Sistema de Gerenciamento para Oficina de Motos</title>
   <link rel="icon" type="image/png" href="favicon.png">
+  <script>
+    (function () {
+      try {
+        var theme = localStorage.getItem("sgom_theme_v1");
+        document.documentElement.setAttribute("data-theme", theme === "dark" ? "dark" : "light");
+      } catch (e) {
+        document.documentElement.setAttribute("data-theme", "light");
+      }
+    })();
+  </script>
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
