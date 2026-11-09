@@ -435,7 +435,7 @@
         '<p class="muted" style="font-size:13px;margin-top:0">Crie sua conta para acompanhar suas O.S. e aprovar orçamentos.</p>' +
         field("Nome", '<input name="name" required placeholder="Seu nome completo">') +
         field("E-mail", '<input name="email" type="email" required placeholder="voce@email.com">') +
-        field("Telefone", '<input name="phone" placeholder="(11) 90000-0000">') +
+        field("Telefone", '<input name="phone" placeholder="(48) 99842-5702">') +
         field("Senha", '<input name="password" type="password" required placeholder="mínimo de 4 caracteres">') +
         field("Confirmar senha", '<input name="password2" type="password" required placeholder="digite a senha novamente">') +
         '<button class="btn btn--primary" style="width:100%" type="submit">Criar conta e entrar</button>' +
@@ -641,23 +641,6 @@
             '</ul>' +
           '</article>' +
         '</div>' +
-        '<div class="landing-future">' +
-          '<div class="landing-future-head">' +
-            '<span class="badge landing-badge-soon">Em breve</span>' +
-            '<h3>Próximos passos</h3>' +
-            '<p>Evoluções planejadas para deixar a rotina ainda mais integrada.</p>' +
-          '</div>' +
-          '<div class="landing-future-grid">' +
-            '<div class="landing-future-item">' +
-              '<span class="landing-icon">' + icon("chat", 20) + '</span>' +
-              '<div><strong>Integração com WhatsApp</strong><span>Envio de orçamentos e avisos direto para o cliente.</span></div>' +
-            '</div>' +
-            '<div class="landing-future-item">' +
-              '<span class="landing-icon">' + icon("chart", 20) + '</span>' +
-              '<div><strong>Relatórios financeiros</strong><span>Receita, custos e desempenho da oficina em relatórios claros.</span></div>' +
-            '</div>' +
-          '</div>' +
-        '</div>' +
       '</div>' +
     '</section>';
   }
@@ -669,27 +652,30 @@
           '<span class="landing-eyebrow landing-eyebrow--dark">Contatos</span>' +
           '<h2>Fale com a gente</h2>' +
           '<p>Tem dúvidas sobre o sistema ou quer acompanhar sua moto? Use um dos canais abaixo.</p>' +
-          '<div class="landing-contact-list">' +
-            '<div class="landing-contact-item">' +
-              '<span class="landing-icon">' + icon("chat", 18) + '</span>' +
-              '<div><strong>E-mail</strong><a href="mailto:contato@sgom.com.br">contato@sgom.com.br</a></div>' +
+          '<div class="landing-location-card">' +
+            '<img class="landing-location-photo" src="oficina.png" alt="Fachada da oficina SGOM" loading="lazy" width="1440" height="1081">' +
+            '<div class="landing-contact-list">' +
+              '<div class="landing-contact-item">' +
+                '<span class="landing-icon">' + icon("chat", 18) + '</span>' +
+                '<div><strong>E-mail</strong><a href="mailto:contato@sgom.com.br">contato@sgom.com.br</a></div>' +
+              '</div>' +
+              '<div class="landing-contact-item">' +
+                '<span class="landing-icon">' + whatsappIcon(18) + '</span>' +
+                '<div><strong>Telefone / WhatsApp</strong><a href="https://wa.me/5548998425702" target="_blank" rel="noopener">(48) 99842-5702</a></div>' +
+              '</div>' +
+              '<div class="landing-contact-item">' +
+                '<span class="landing-icon">' + icon("pin", 18) + '</span>' +
+                '<div><strong>Endereço</strong><span>Rod. Interpraias, 1236, Balneário Gaivota - SC, 88955-000</span></div>' +
+              '</div>' +
+              '<div class="landing-contact-item">' +
+                '<span class="landing-icon">' + icon("clock", 18) + '</span>' +
+                '<div><strong>Horário</strong><span>Seg a Sex, 8h às 18h · Sáb, 8h às 12h</span></div>' +
+              '</div>' +
             '</div>' +
-            '<div class="landing-contact-item">' +
-              '<span class="landing-icon">' + whatsappIcon(18) + '</span>' +
-              '<div><strong>Telefone / WhatsApp</strong><a href="https://wa.me/5511900000000" target="_blank" rel="noopener">(11) 90000-0000</a></div>' +
+            '<div class="landing-hero-actions">' +
+              '<a class="btn btn--primary" href="https://wa.me/5548998425702" target="_blank" rel="noopener">Falar no WhatsApp</a>' +
+              '<button class="btn" type="button" data-act="access-open">Entrar</button>' +
             '</div>' +
-            '<div class="landing-contact-item">' +
-              '<span class="landing-icon">' + icon("pin", 18) + '</span>' +
-              '<div><strong>Endereço</strong><span>Sombrio - SC</span></div>' +
-            '</div>' +
-            '<div class="landing-contact-item">' +
-              '<span class="landing-icon">' + icon("clock", 18) + '</span>' +
-              '<div><strong>Horário</strong><span>Seg a Sex, 8h às 18h · Sáb, 8h às 12h</span></div>' +
-            '</div>' +
-          '</div>' +
-          '<div class="landing-hero-actions">' +
-            '<a class="btn btn--primary" href="https://wa.me/5511900000000" target="_blank" rel="noopener">Falar no WhatsApp</a>' +
-            '<button class="btn" type="button" data-act="access-open">Entrar</button>' +
           '</div>' +
         '</div>' +
         '<aside class="landing-contact-card">' +
@@ -711,7 +697,7 @@
             '<span class="badge landing-badge-soon">Atendimento</span>' +
             '<h3>Acompanhe sua moto</h3>' +
             '<p>Entre na Área do Cliente para consultar o andamento das suas O.S. e o histórico da sua moto.</p>' +
-            '<div class="landing-footer-city">' + icon("pin", 16) + ' Sombrio - SC</div>' +
+            '<div class="landing-footer-city">' + icon("pin", 16) + ' Balneário Gaivota - SC</div>' +
           '</div>' +
           '<button class="btn btn--primary" type="button" data-act="client-login">Acompanhar Minha Moto</button>' +
         '</div>' +
@@ -727,7 +713,7 @@
             '<a href="#contatos">Contatos</a>' +
             '<a href="#" data-act="access-open">Entrar</a>' +
           '</nav>' +
-          '<small>© 2026 SGOM · Sombrio - SC. Todos os direitos reservados.</small>' +
+          '<small>© 2026 SGOM · Balneário Gaivota - SC. Todos os direitos reservados.</small>' +
         '</div>' +
       '</div>' +
     '</footer>';
@@ -745,7 +731,7 @@
   function chatBotReply(text) {
     var t = normText(text);
     if (/horario|hora|aberto|abre|funciona|fecha/.test(t)) {
-      return "Nosso horário de atendimento é de segunda a sexta, das 8h às 18h, e sábado das 8h às 12h. Estamos em Sombrio - SC.";
+      return "Nosso horário de atendimento é de segunda a sexta, das 8h às 18h, e sábado das 8h às 12h. Estamos na Rod. Interpraias, 1236, Balneário Gaivota - SC.";
     }
     if (/agendar|agendamento|revisao|marcar|marcacao/.test(t)) {
       return "Para agendar uma revisão, informe sua placa e o período desejado. Um atendente confirma o horário em seguida.";
@@ -810,7 +796,7 @@
     { id: "estoque", label: "Estoque", icon: "box" },
     { id: "clientes", label: "Clientes", icon: "users" },
     { id: "servicos", label: "Serviços", icon: "list", more: true },
-    { id: "financeiro", label: "Financeiro", icon: "chart", more: true },
+    { id: "financeiro", label: "Financeiro", icon: "chart" },
     { id: "funcionarios", label: "Funcionários", icon: "badge", more: true }
   ];
   function defaultView(user) { return user.role === "CLIENTE" ? "minhasos" : "dashboard"; }
