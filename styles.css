@@ -132,7 +132,7 @@ h1, h2, h3 { margin: 0; line-height: 1.25; }
 button { font-family: inherit; }
 
 body, .landing, .landing-header, .landing-hero, .landing-hero-glow, .mockup, .mockup-kpi,
-.mockup-card, .mockup-float, .landing-future, .landing-future-item, .landing-contact-card,
+.mockup-card, .mockup-float, .landing-future, .landing-future-item,
 .landing-footer, .login-card, .login-head, .topbar, .card, .modal, .modal-head, .modal-foot,
 .field input, .field select, .field textarea, .toast, .btn, .badge, .plate, .hint {
   transition: background-color .25s ease, color .25s ease, border-color .25s ease, box-shadow .25s ease;
@@ -598,7 +598,7 @@ html { scroll-behavior: smooth; }
 .landing-future-item div span { display: block; color: var(--muted); font-size: 12px; line-height: 1.5; margin-top: 3px; }
 
 /* ---------------- Contato ---------------- */
-.landing-contact-grid { display: grid; grid-template-columns: 1.05fr .95fr; gap: 48px; align-items: center; }
+.landing-contact-grid { display: grid; grid-template-columns: minmax(0, 760px); justify-content: center; gap: 48px; }
 .landing-contact-copy h2 { font-size: clamp(26px, 3.4vw, 38px); letter-spacing: -.025em; margin: 14px 0 12px; }
 .landing-contact-copy > p { color: var(--muted); font-size: 15.5px; line-height: 1.65; margin: 0; max-width: 520px; }
 .landing-contact-list { display: flex; flex-direction: column; gap: 14px; margin: 24px 0 28px; }
@@ -607,17 +607,6 @@ html { scroll-behavior: smooth; }
 .landing-contact-item strong { display: block; font-size: 13.5px; }
 .landing-contact-item div span, .landing-contact-item div a { color: var(--muted); font-size: 13.5px; text-decoration: none; }
 .landing-contact-item div a:hover { color: var(--accent-strong); }
-.landing-contact-card {
-  background: var(--surface); color: var(--text); border: 1px solid var(--border); border-radius: 18px; padding: 30px;
-  box-shadow: var(--shadow);
-}
-.landing-contact-card h3 { font-size: 22px; margin: 12px 0 8px; }
-.landing-contact-card p { color: var(--muted); font-size: 14px; line-height: 1.6; margin: 0 0 20px; }
-.landing-contact-card .btn { width: 100%; }
-.landing-contact-card .btn + .btn { margin-top: 10px; }
-.landing-contact-card .landing-btn-ghost { color: var(--text); border-color: var(--border); }
-.landing-contact-card .landing-btn-ghost:hover { background: var(--surface-2); }
-
 /* Card de localizacao: sempre em tema claro, com foto da fachada */
 .landing-location-card {
   margin-top: 22px;
@@ -662,16 +651,6 @@ html { scroll-behavior: smooth; }
 .landing-footer nav a { color: var(--footer-fg); text-decoration: none; font-size: 13px; }
 .landing-footer nav a:hover { color: var(--footer-strong); }
 .landing-footer small { display: block; width: 100%; border-top: 1px solid var(--footer-border); padding-top: 18px; font-size: 12px; color: var(--footer-muted); }
-.landing-footer-card {
-  display: flex; align-items: center; justify-content: space-between; gap: 22px; flex-wrap: wrap;
-  background: var(--surface-2); border: 1px solid var(--footer-border); border-radius: 16px;
-  padding: 24px; margin-bottom: 28px;
-}
-.landing-footer-card h3 { font-size: 20px; margin: 10px 0 6px; color: var(--footer-strong); }
-.landing-footer-card p { color: var(--footer-muted); font-size: 13.5px; line-height: 1.55; margin: 0; max-width: 560px; }
-.landing-footer-city { display: inline-flex; align-items: center; gap: 6px; color: var(--footer-muted); font-size: 13px; font-weight: 600; margin-top: 12px; }
-.landing-footer-city svg { color: var(--accent); }
-
 /* ---------------- Login (voltar) ---------------- */
 .login-back {
   display: inline-flex; align-items: center; gap: 6px;
@@ -960,7 +939,6 @@ html[data-theme="dark"] .appt-done { background: #2a323a; color: #9ca3af; border
   .client-file-grid { grid-template-columns: 1fr; }
   .wa-widget { right: 14px; bottom: 14px; }
   .wa-window { max-height: calc(100vh - 100px); }
-  .landing-footer-card { padding: 18px; }
   .landing-location-card { padding: 16px; border-radius: 14px; }
   .landing-location-photo { max-height: 220px; border-radius: 10px; margin-bottom: 16px; }
 }
@@ -969,7 +947,7 @@ html[data-theme="dark"] .appt-done { background: #2a323a; color: #9ca3af; border
   html { scroll-behavior: auto; }
   .landing-card { transition: none; }
   body, .landing, .landing-header, .landing-hero, .landing-hero-glow, .mockup, .mockup-kpi,
-  .mockup-card, .mockup-float, .landing-future, .landing-future-item, .landing-contact-card,
+  .mockup-card, .mockup-float, .landing-future, .landing-future-item,
   .landing-footer, .login-card, .login-head, .topbar, .card, .modal, .modal-head, .modal-foot,
   .field input, .field select, .field textarea, .toast, .btn, .badge, .plate, .hint {
     transition: none;

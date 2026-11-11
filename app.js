@@ -544,7 +544,6 @@
           '<h1>Sua oficina organizada <span>do orçamento à entrega.</span></h1>' +
           '<p>O SGOM centraliza estoque, atendimentos e ordens de serviço em uma interface simples. Menos planilhas, mais controle sobre cada moto que passa pela sua oficina.</p>' +
           '<div class="landing-hero-actions">' +
-            '<button class="btn btn--primary btn--lg" type="button" data-act="access-open">Entrar</button>' +
             '<a class="btn btn--lg landing-btn-ghost" href="#servicos">Conhecer os serviços</a>' +
           '</div>' +
           '<ul class="landing-hero-points">' +
@@ -674,17 +673,9 @@
             '</div>' +
             '<div class="landing-hero-actions">' +
               '<a class="btn btn--primary" href="https://wa.me/5548998425702" target="_blank" rel="noopener">Falar no WhatsApp</a>' +
-              '<button class="btn" type="button" data-act="access-open">Entrar</button>' +
             '</div>' +
           '</div>' +
         '</div>' +
-        '<aside class="landing-contact-card">' +
-          '<span class="badge landing-badge-soon">Acesso</span>' +
-          '<h3>Já é cliente?</h3>' +
-          '<p>Acompanhe suas ordens de serviço, aprove orçamentos e consulte o histórico da sua moto.</p>' +
-          '<button class="btn btn--primary" type="button" data-act="client-login">Entrar na minha conta</button>' +
-          '<button class="btn landing-btn-ghost" type="button" data-act="landing-signup">Criar conta de cliente</button>' +
-        '</aside>' +
       '</div>' +
     '</section>';
   }
@@ -692,15 +683,6 @@
   function landingFooter() {
     return '<footer class="landing-footer">' +
       '<div class="landing-container">' +
-        '<div class="landing-footer-card">' +
-          '<div>' +
-            '<span class="badge landing-badge-soon">Atendimento</span>' +
-            '<h3>Acompanhe sua moto</h3>' +
-            '<p>Entre na Área do Cliente para consultar o andamento das suas O.S. e o histórico da sua moto.</p>' +
-            '<div class="landing-footer-city">' + icon("pin", 16) + ' Balneário Gaivota - SC</div>' +
-          '</div>' +
-          '<button class="btn btn--primary" type="button" data-act="client-login">Acompanhar Minha Moto</button>' +
-        '</div>' +
         '<div class="landing-footer-inner">' +
           '<div class="landing-footer-brand">' +
             '<span class="brand-mark">' + brandMark(36) + '</span>' +
@@ -711,7 +693,6 @@
             '<a href="#sobre">Sobre nós</a>' +
             '<a href="#servicos">Serviços</a>' +
             '<a href="#contatos">Contatos</a>' +
-            '<a href="#" data-act="access-open">Entrar</a>' +
           '</nav>' +
           '<small>© 2026 SGOM · Balneário Gaivota - SC. Todos os direitos reservados.</small>' +
         '</div>' +
